@@ -1,5 +1,5 @@
-import { Brain } from "lucide-react";
 import { Link } from "react-router-dom";
+import knebelLogo from "@/assets/knebel-logo.png";
 
 const Footer = () => (
   <footer className="border-t border-border bg-card mt-auto">
@@ -7,10 +7,8 @@ const Footer = () => (
       <div className="grid gap-8 md:grid-cols-3">
         <div>
           <div className="flex items-center gap-2 mb-3">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
-              <Brain className="h-4 w-4 text-primary-foreground" />
-            </div>
-            <span className="font-display text-lg font-bold text-foreground">PsychRef</span>
+            <img src={knebelLogo} alt="Knebel Knebel Knotes logo" className="h-8 w-8" />
+            <span className="font-display text-lg font-bold text-foreground">Knebel Knebel Knotes</span>
           </div>
           <p className="text-sm text-muted-foreground leading-relaxed">
             A comprehensive clinical psychiatry reference for practitioners. Evidence-based diagnostic criteria, treatment algorithms, and medication guides.
@@ -31,7 +29,7 @@ const Footer = () => (
         </div>
       </div>
       <div className="mt-8 border-t border-border pt-6 text-center text-xs text-muted-foreground">
-        © {new Date().getFullYear()} PsychRef. All rights reserved.
+        © {new Date().getFullYear()} Knebel Knebel Knotes. All rights reserved.
       </div>
     </div>
   </footer>

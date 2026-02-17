@@ -1,7 +1,8 @@
 import { Link, useNavigate } from "react-router-dom";
-import { Search, Menu, X, Brain } from "lucide-react";
+import { Search, Menu, X } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import knebelLogo from "@/assets/knebel-logo.png";
 
 const Header = () => {
   const [searchOpen, setSearchOpen] = useState(false);
@@ -22,12 +23,10 @@ const Header = () => {
     <header className="sticky top-0 z-50 border-b border-border bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/80">
       <div className="container flex h-16 items-center justify-between">
         <Link to="/" className="flex items-center gap-2.5">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary">
-            <Brain className="h-5 w-5 text-primary-foreground" />
-          </div>
+          <img src={knebelLogo} alt="Knebel Knebel Knotes logo" className="h-9 w-9" />
           <div className="flex flex-col">
             <span className="font-display text-lg font-bold leading-tight text-foreground">
-              PsychRef
+              Knebel Knebel Knotes
             </span>
             <span className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground">
               Psychiatry Reference
