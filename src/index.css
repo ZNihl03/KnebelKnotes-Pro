@@ -6,6 +6,7 @@
 
 @layer base {
   :root {
+    color-scheme: light dark;
     --background: 40 20% 98%;
     --foreground: 200 30% 12%;
 
@@ -53,7 +54,8 @@
     --font-body: 'Inter', system-ui, sans-serif;
   }
 
-  .dark {
+  :root[data-theme="dark"] {
+    color-scheme: dark;
     --background: 200 30% 8%;
     --foreground: 40 10% 92%;
 

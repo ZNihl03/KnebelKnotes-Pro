@@ -3,6 +3,8 @@ import { Search, Menu, X } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import knebelLogo from "@/assets/knebel-logo.png";
+import AuthBar from "@/components/AuthBar";
+import ThemeToggle from "@/components/ThemeToggle";
 
 const Header = () => {
   const [searchOpen, setSearchOpen] = useState(false);
@@ -43,12 +45,6 @@ const Header = () => {
             Home
           </Link>
           <Link
-            to="/categories"
-            className="rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
-          >
-            Categories
-          </Link>
-          <Link
             to="/search"
             className="rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
           >
@@ -57,6 +53,12 @@ const Header = () => {
         </nav>
 
         <div className="flex items-center gap-2">
+          <div className="hidden items-center md:flex">
+            <AuthBar variant="desktop" />
+          </div>
+
+          <ThemeToggle />
+
           {/* Search toggle */}
           <button
             onClick={() => setSearchOpen(!searchOpen)}
@@ -108,19 +110,15 @@ const Header = () => {
               Home
             </Link>
             <Link
-              to="/categories"
-              onClick={() => setMobileOpen(false)}
-              className="rounded-md px-3 py-2 text-sm font-medium text-foreground hover:bg-muted"
-            >
-              Categories
-            </Link>
-            <Link
               to="/search"
               onClick={() => setMobileOpen(false)}
               className="rounded-md px-3 py-2 text-sm font-medium text-foreground hover:bg-muted"
             >
               Search
             </Link>
+          </div>
+          <div className="mt-4 border-t border-border pt-4">
+            <AuthBar variant="mobile" />
           </div>
         </nav>
       )}

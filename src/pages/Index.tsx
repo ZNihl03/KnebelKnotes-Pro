@@ -1,17 +1,13 @@
-import { Link, useNavigate } from "react-router-dom";
-import { Search, ArrowRight, BookOpen, Stethoscope, FlaskConical } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { Search, BookOpen, Stethoscope, FlaskConical } from "lucide-react";
 import { useState } from "react";
 import Layout from "@/components/Layout";
-import CategoryCard from "@/components/CategoryCard";
-import { getRootCategories } from "@/data/mockData";
 import { Button } from "@/components/ui/button";
 import heroBg from "@/assets/hero-bg.jpg";
 
 const Index = () => {
   const [query, setQuery] = useState("");
   const navigate = useNavigate();
-  const rootCategories = getRootCategories();
-
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     if (query.trim()) {
@@ -95,30 +91,6 @@ const Index = () => {
         </div>
       </section>
 
-      {/* Categories */}
-      <section className="container pb-20">
-        <div className="mb-8 flex items-end justify-between">
-          <div>
-            <h2 className="font-display text-2xl font-bold text-foreground">
-              Browse by Category
-            </h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Explore disorders organized by DSM-5 classification
-            </p>
-          </div>
-          <Link
-            to="/categories"
-            className="hidden items-center gap-1 text-sm font-medium text-primary hover:underline md:flex"
-          >
-            View all <ArrowRight className="h-3.5 w-3.5" />
-          </Link>
-        </div>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {rootCategories.map((cat, i) => (
-            <CategoryCard key={cat.id} category={cat} index={i} />
-          ))}
-        </div>
-      </section>
     </Layout>
   );
 };
