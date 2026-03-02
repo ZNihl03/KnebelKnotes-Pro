@@ -1,5 +1,5 @@
 import { Link, useNavigate } from "react-router-dom";
-import { Search, Menu, X } from "lucide-react";
+import { Search, Menu, X, Settings } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import knebelLogo from "@/assets/knebel-logo.png";
@@ -75,6 +75,13 @@ const Header = () => {
           </div>
 
           <ThemeToggle />
+          <Link
+            to="/settings"
+            className="flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            aria-label="Account settings"
+          >
+            <Settings className="h-4 w-4" />
+          </Link>
 
           {/* Search toggle */}
           <button

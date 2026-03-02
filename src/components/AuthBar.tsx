@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { LogOut, Settings, UserRound } from "lucide-react";
+import { LogOut, UserRound } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -109,13 +109,6 @@ const AuthBar = ({ variant = "desktop" }: AuthBarProps) => {
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align={isCompact ? "end" : "start"} className="w-44">
-        <DropdownMenuItem asChild>
-          <Link to="/settings" className="flex items-center gap-2">
-            <Settings className="h-4 w-4" />
-            Settings
-          </Link>
-        </DropdownMenuItem>
-        <DropdownMenuSeparator />
         <DropdownMenuItem
           onSelect={(event) => {
             event.preventDefault();

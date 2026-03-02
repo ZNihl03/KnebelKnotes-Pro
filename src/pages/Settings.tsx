@@ -12,12 +12,14 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabaseClient";
 import { createSubAdmin } from "@/lib/adminApi";
 import { format } from "date-fns";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 type SubAdmin = {
   id: string;
   email: string | null;
   full_name: string | null;
   username: string | null;
+  profile_image_path: string | null;
   created_at: string | null;
 };
 
@@ -30,13 +32,9 @@ const Settings = () => {
   const [fullName, setFullName] = useState("");
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
-  const [newEmail, setNewEmail] = useState("");
-  const [emailOtp, setEmailOtp] = useState("");
   const [password, setPassword] = useState("");
   const [savingProfile, setSavingProfile] = useState(false);
   const [savingPassword, setSavingPassword] = useState(false);
-  const [sendingEmailOtp, setSendingEmailOtp] = useState(false);
-  const [verifyingEmailOtp, setVerifyingEmailOtp] = useState(false);
   const [subAdmins, setSubAdmins] = useState<SubAdmin[]>([]);
   const [subAdminLoading, setSubAdminLoading] = useState(false);
   const [subAdminError, setSubAdminError] = useState<string | null>(null);
@@ -53,15 +51,13 @@ const Settings = () => {
     setFullName(profile?.full_name ?? user.user_metadata?.full_name ?? user.user_metadata?.name ?? "");
     setUsername(profile?.username ?? user.user_metadata?.username ?? "");
     setEmail(profile?.email ?? user.email ?? "");
-    setNewEmail("");
-    setEmailOtp("");
   }, [user, profile]);
 
   const loadSubAdmins = useCallback(async () => {
     setSubAdminLoading(true);
     const { data, error } = await supabase
       .from("profiles")
-      .select("id, email, full_name, username, created_at")
+      .select("id, email, full_name, username, profile_image_path, created_at")
       .eq("role", "sub_admin")
       .order("created_at", { ascending: false });
 
@@ -76,6 +72,19 @@ const Settings = () => {
     setSubAdminError(null);
     setSubAdminLoading(false);
   }, []);
+
+  const getAvatarInitials = (name?: string | null) =>
+    name
+      ? name
+          .split(" ")
+          .filter(Boolean)
+          .slice(0, 2)
+          .map((part) => part[0]?.toUpperCase())
+          .join("")
+      : "SA";
+
+  const buildAvatarUrl = (path: string | null) =>
+    path ? `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/admin-profile-images/${path}` : null;
 
   useEffect(() => {
     if (!isSuperAdmin) return;
@@ -113,64 +122,6 @@ const Settings = () => {
       await refreshProfile();
     }
     setSavingProfile(false);
-  };
-
-  const handleSendEmailOtp = async (event: React.FormEvent) => {
-    event.preventDefault();
-    if (!isSuperAdmin) {
-      toast.error("You do not have permission to update email.");
-      return;
-    }
-    if (!newEmail.trim()) {
-      toast.error("Enter a new email address.");
-      return;
-    }
-    if (newEmail.trim() === email) {
-      toast.error("New email must be different from the current email.");
-      return;
-    }
-
-    setSendingEmailOtp(true);
-    const { error } = await supabase.auth.updateUser({ email: newEmail.trim() });
-    setSendingEmailOtp(false);
-
-    if (error) {
-      toast.error(error.message);
-      return;
-    }
-
-    toast.success("Verification code sent. Check your email.");
-  };
-
-  const handleVerifyEmailOtp = async (event: React.FormEvent) => {
-    event.preventDefault();
-    if (!isSuperAdmin) {
-      toast.error("You do not have permission to verify email.");
-      return;
-    }
-    if (!newEmail.trim() || !emailOtp.trim()) {
-      toast.error("Enter the email and verification code.");
-      return;
-    }
-
-    setVerifyingEmailOtp(true);
-    const { error } = await supabase.auth.verifyOtp({
-      email: newEmail.trim(),
-      token: emailOtp.trim(),
-      type: "email_change",
-    });
-    setVerifyingEmailOtp(false);
-
-    if (error) {
-      toast.error(error.message);
-      return;
-    }
-
-    toast.success("Email updated.");
-    setEmail(newEmail.trim());
-    setNewEmail("");
-    setEmailOtp("");
-    await refreshProfile();
   };
 
   const handlePasswordSave = async (event: React.FormEvent) => {
@@ -248,24 +199,6 @@ const Settings = () => {
           <div className="space-y-6">
             <Card>
               <CardHeader>
-                <CardTitle>Profile Image</CardTitle>
-                <CardDescription>Upload and edit your profile image.</CardDescription>
-              </CardHeader>
-              <CardContent>
-                {isAdmin ? (
-                  <ProfileImageUploader
-                    userId={user.id}
-                    initialPath={profile?.profile_image_path ?? null}
-                    onUploaded={() => refreshProfile()}
-                  />
-                ) : (
-                  <p className="text-sm text-muted-foreground">Only admins can upload a profile image.</p>
-                )}
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
                 <CardTitle>Role Information</CardTitle>
                 <CardDescription>Current permissions and role.</CardDescription>
               </CardHeader>
@@ -284,6 +217,24 @@ const Settings = () => {
                       ? "Limited access within assigned scope."
                       : "Contact a Super Admin for access."}
                 </p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Profile Image</CardTitle>
+                <CardDescription>Upload and edit your profile image.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {isAdmin ? (
+                  <ProfileImageUploader
+                    userId={user.id}
+                    initialPath={profile?.profile_image_path ?? null}
+                    onUploaded={() => refreshProfile()}
+                  />
+                ) : (
+                  <p className="text-sm text-muted-foreground">Only admins can upload a profile image.</p>
+                )}
               </CardContent>
             </Card>
 
@@ -332,47 +283,6 @@ const Settings = () => {
                 </CardFooter>
               </form>
             </Card>
-
-            {isSuperAdmin && (
-              <Card>
-                <CardHeader>
-                  <CardTitle>Email Verification</CardTitle>
-                  <CardDescription>Change your email and verify with a code.</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <form onSubmit={handleSendEmailOtp} className="space-y-3">
-                    <div className="space-y-2">
-                      <Label htmlFor="new-email">New email</Label>
-                      <Input
-                        id="new-email"
-                        type="email"
-                        value={newEmail}
-                        onChange={(event) => setNewEmail(event.target.value)}
-                        placeholder="name@newdomain.com"
-                      />
-                    </div>
-                    <Button type="submit" variant="secondary" disabled={sendingEmailOtp}>
-                      {sendingEmailOtp ? "Sending code..." : "Send verification code"}
-                    </Button>
-                  </form>
-
-                  <form onSubmit={handleVerifyEmailOtp} className="space-y-3">
-                    <div className="space-y-2">
-                      <Label htmlFor="email-otp">Verification code</Label>
-                      <Input
-                        id="email-otp"
-                        value={emailOtp}
-                        onChange={(event) => setEmailOtp(event.target.value)}
-                        placeholder="Enter the code from your email"
-                      />
-                    </div>
-                    <Button type="submit" disabled={verifyingEmailOtp}>
-                      {verifyingEmailOtp ? "Verifying..." : "Verify and update email"}
-                    </Button>
-                  </form>
-                </CardContent>
-              </Card>
-            )}
 
             <Card>
               <form onSubmit={handlePasswordSave}>
@@ -472,16 +382,27 @@ const Settings = () => {
                               key={subAdmin.id}
                               className="flex flex-col justify-between gap-2 rounded-lg border border-border bg-muted/40 p-3 sm:flex-row sm:items-center"
                             >
-                              <div>
-                                <p className="text-sm font-medium text-foreground">
-                                  {subAdmin.full_name || subAdmin.username || subAdmin.email}
-                                </p>
-                                <p className="text-xs text-muted-foreground">
-                                  {subAdmin.email || "No email"} ·{" "}
-                                  {subAdmin.created_at
-                                    ? format(new Date(subAdmin.created_at), "MMM dd, yyyy")
-                                    : "Unknown date"}
-                                </p>
+                              <div className="flex items-center gap-3">
+                                <Avatar className="h-10 w-10">
+                                  <AvatarImage
+                                    src={buildAvatarUrl(subAdmin.profile_image_path) ?? undefined}
+                                    alt={subAdmin.full_name ?? subAdmin.username ?? "Sub Admin"}
+                                  />
+                                  <AvatarFallback className="text-xs">
+                                    {getAvatarInitials(subAdmin.full_name || subAdmin.username)}
+                                  </AvatarFallback>
+                                </Avatar>
+                                <div>
+                                  <p className="text-sm font-medium text-foreground">
+                                    {subAdmin.full_name || subAdmin.username || subAdmin.email}
+                                  </p>
+                                  <p className="text-xs text-muted-foreground">
+                                    {subAdmin.email || "No email"} ·{" "}
+                                    {subAdmin.created_at
+                                      ? format(new Date(subAdmin.created_at), "MMM dd, yyyy")
+                                      : "Unknown date"}
+                                  </p>
+                                </div>
                               </div>
                               <Badge variant="secondary">Sub Admin</Badge>
                             </div>

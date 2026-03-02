@@ -1,8 +1,8 @@
 import { useSearchParams, Link } from "react-router-dom";
 import { Search, Clock, Tag, Folder } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Layout from "@/components/Layout";
-import { searchArticles } from "@/data/mockData";
+import { searchArticles, type Article } from "@/data/mockData";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/lib/supabaseClient";
 
@@ -19,6 +19,8 @@ const SearchPage = () => {
   const [categoryResults, setCategoryResults] = useState<CategoryResult[]>([]);
   const [categoryError, setCategoryError] = useState<string | null>(null);
   const [categoryLoading, setCategoryLoading] = useState(false);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const blurTimeoutRef = useRef<number | null>(null);
 
   const effectiveQuery = query.trim();
 
@@ -27,6 +29,20 @@ const SearchPage = () => {
   }, [paramQuery]);
 
   const results = useMemo(() => (effectiveQuery ? searchArticles(effectiveQuery) : []), [effectiveQuery]);
+  const suggestions = useMemo(() => {
+    if (!effectiveQuery) return [];
+    const categorySuggestions = categoryResults.map((category) => ({
+      type: "category" as const,
+      label: category.name,
+      id: category.id,
+    }));
+    const articleSuggestions = (results as Article[]).map((article) => ({
+      type: "article" as const,
+      label: article.title,
+      id: article.id,
+    }));
+    return [...categorySuggestions, ...articleSuggestions].slice(0, 6);
+  }, [effectiveQuery, categoryResults, results]);
 
   useEffect(() => {
     let isMounted = true;
@@ -76,6 +92,27 @@ const SearchPage = () => {
     if (query.trim()) {
       setSearchParams({ q: query.trim() });
     }
+    setShowSuggestions(false);
+  };
+
+  const handleSuggestionSelect = (value: string) => {
+    setQuery(value);
+    setSearchParams({ q: value });
+    setShowSuggestions(false);
+  };
+
+  const handleFocus = () => {
+    if (blurTimeoutRef.current) {
+      window.clearTimeout(blurTimeoutRef.current);
+      blurTimeoutRef.current = null;
+    }
+    setShowSuggestions(true);
+  };
+
+  const handleBlur = () => {
+    blurTimeoutRef.current = window.setTimeout(() => {
+      setShowSuggestions(false);
+    }, 150);
   };
 
   return (
@@ -84,15 +121,43 @@ const SearchPage = () => {
         <h1 className="font-display text-3xl font-bold text-foreground mb-6">Search Articles</h1>
 
         <form onSubmit={handleSearch} className="flex gap-2 mb-8">
-          <div className="flex flex-1 items-center gap-2 rounded-lg border border-input bg-background px-3">
+          <div className="relative flex flex-1 items-center gap-2 rounded-lg border border-input bg-background px-3">
             <Search className="h-4 w-4 text-muted-foreground shrink-0" />
             <input
               type="text"
               placeholder="Search disorders, medications, criteria..."
               value={query}
-              onChange={(e) => setQuery(e.target.value)}
+              onChange={(e) => {
+                setQuery(e.target.value);
+                setShowSuggestions(true);
+              }}
+              onFocus={handleFocus}
+              onBlur={handleBlur}
               className="flex-1 bg-transparent py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
             />
+            {showSuggestions && effectiveQuery && suggestions.length > 0 && (
+              <div
+                className="absolute left-0 right-0 top-full z-20 mt-2 rounded-xl border border-border bg-card p-2 shadow-lg"
+                onMouseDown={(event) => event.preventDefault()}
+              >
+                <div className="space-y-1">
+                  {suggestions.map((item) => (
+                    <button
+                      key={`${item.type}-${item.id}`}
+                      type="button"
+                      onClick={() => handleSuggestionSelect(item.label)}
+                      className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm text-foreground transition-colors hover:bg-muted"
+                    >
+                      <span className="flex h-6 w-6 items-center justify-center rounded-md bg-accent/15 text-accent-foreground">
+                        {item.type === "category" ? <Folder className="h-3.5 w-3.5" /> : <Search className="h-3.5 w-3.5" />}
+                      </span>
+                      <span className="flex-1 truncate">{item.label}</span>
+                      <span className="text-xs text-muted-foreground capitalize">{item.type}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
           <Button type="submit">Search</Button>
         </form>
@@ -118,8 +183,6 @@ const SearchPage = () => {
                 <Link
                   key={category.id}
                   to={`/category/${category.id}`}
-                  target="_blank"
-                  rel="noreferrer"
                   className="group block rounded-xl border border-border bg-card p-4 shadow-[var(--card-shadow)] transition-all hover:-translate-y-0.5 hover:shadow-[var(--card-shadow-hover)]"
                 >
                   <div className="flex items-start gap-2">

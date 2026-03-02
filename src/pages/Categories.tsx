@@ -87,8 +87,6 @@ const Categories = () => {
               <Link
                 key={category.id}
                 to={`/category/${category.id}`}
-                target="_blank"
-                rel="noreferrer"
                 className="group rounded-xl border border-border bg-card p-5 shadow-[var(--card-shadow)] transition-all hover:-translate-y-0.5 hover:shadow-[var(--card-shadow-hover)]"
               >
                 <h3 className="font-display text-base font-semibold text-foreground group-hover:text-primary transition-colors">

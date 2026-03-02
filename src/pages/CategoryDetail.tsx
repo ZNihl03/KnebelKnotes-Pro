@@ -1,13 +1,35 @@
-import { useMemo, useState, useEffect } from "react";
-import { Link, useParams } from "react-router-dom";
-import { ChevronRight } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Link, useNavigate, useParams } from "react-router-dom";
+import {
+  ChevronRight,
+  ClipboardList,
+  Bandage,
+  TrendingUp,
+  RefreshCcw,
+  FlaskConical,
+  PenLine,
+  Trash2,
+} from "lucide-react";
 import Layout from "@/components/Layout";
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/components/ui/sonner";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
+import { FloatingNav } from "@/components/ui/floating-navbar";
 
 type CategoryDetailRecord = {
   id: string;
@@ -32,6 +54,7 @@ type SectionKey = (typeof SECTIONS)[number]["key"];
 
 const CategoryDetail = () => {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const { profile, loading: authLoading } = useAuth();
   const [category, setCategory] = useState<CategoryDetailRecord | null>(null);
   const [loading, setLoading] = useState(true);
@@ -39,6 +62,14 @@ const CategoryDetail = () => {
   const [activeTab, setActiveTab] = useState<SectionKey>("diagnosis");
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const deleteTimerRef = useRef<number | null>(null);
+  const [editingMeta, setEditingMeta] = useState(false);
+  const [metaName, setMetaName] = useState("");
+  const [metaDescription, setMetaDescription] = useState("");
+  const [savingMeta, setSavingMeta] = useState(false);
   const [draft, setDraft] = useState<Record<SectionKey, string>>({
     diagnosis: "",
     treatment: "",
@@ -79,6 +110,8 @@ const CategoryDetail = () => {
         reassessment: data.reassessment ?? "",
         trial: data.trial ?? "",
       });
+      setMetaName(data.name ?? "");
+      setMetaDescription(data.description ?? "");
       setLoading(false);
     };
 
@@ -96,10 +129,6 @@ const CategoryDetail = () => {
 
   const handleJump = (key: SectionKey) => {
     setActiveTab(key);
-    const element = document.getElementById(`section-${key}`);
-    if (element) {
-      element.scrollIntoView({ behavior: "smooth", block: "start" });
-    }
   };
 
   const handleCancel = () => {
@@ -146,6 +175,97 @@ const CategoryDetail = () => {
     setEditing(false);
   };
 
+  const handleMetaSave = async () => {
+    if (!category) return;
+    if (!metaName.trim()) {
+      toast.error("Category name is required.");
+      return;
+    }
+
+    setSavingMeta(true);
+    const { error } = await supabase
+      .from("categories")
+      .update({
+        name: metaName.trim(),
+        description: metaDescription.trim() || null,
+      })
+      .eq("id", category.id);
+    setSavingMeta(false);
+
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+
+    toast.success("Category updated.");
+    setCategory({
+      ...category,
+      name: metaName.trim(),
+      description: metaDescription.trim() || null,
+    });
+    setEditingMeta(false);
+  };
+
+  const handleMetaCancel = () => {
+    if (!category) return;
+    setMetaName(category.name ?? "");
+    setMetaDescription(category.description ?? "");
+    setEditingMeta(false);
+  };
+
+  const executeDelete = async () => {
+    if (!category) return;
+    setDeleting(true);
+    const { data, error } = await supabase.from("categories").delete().eq("id", category.id).select("id");
+    setDeleting(false);
+
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    if (!data || data.length === 0) {
+      toast.error("Delete failed. Check your permissions.");
+      return;
+    }
+
+    toast.success("Category deleted.");
+    navigate("/categories", { replace: true });
+  };
+
+  const cancelDelete = () => {
+    if (deleteTimerRef.current) {
+      window.clearTimeout(deleteTimerRef.current);
+      deleteTimerRef.current = null;
+    }
+    setPendingDelete(false);
+    toast.message("Deletion canceled.");
+  };
+
+  const scheduleDelete = () => {
+    if (!category || pendingDelete) return;
+    setDeleteDialogOpen(false);
+    setPendingDelete(true);
+    toast("Category will be deleted in 5 seconds.", {
+      duration: 5000,
+      action: {
+        label: "Undo",
+        onClick: cancelDelete,
+      },
+    });
+    deleteTimerRef.current = window.setTimeout(() => {
+      setPendingDelete(false);
+      void executeDelete();
+    }, 5000);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (deleteTimerRef.current) {
+        window.clearTimeout(deleteTimerRef.current);
+      }
+    };
+  }, []);
+
   if (loading) {
     return (
       <Layout>
@@ -170,7 +290,7 @@ const CategoryDetail = () => {
   return (
     <Layout>
       <div className="pb-10">
-        <div className="container py-10">
+        <div className="container py-8">
           <nav className="mb-6 flex items-center gap-1.5 text-sm text-muted-foreground">
             <Link to="/" className="hover:text-foreground transition-colors">
               Home
@@ -183,52 +303,150 @@ const CategoryDetail = () => {
             <span className="text-foreground font-medium">{category.name}</span>
           </nav>
 
-          <div className="mb-6">
-            <h1 className="font-display text-3xl font-bold text-foreground">{category.name}</h1>
-            <p className="mt-2 text-muted-foreground">
-              {category.description || "No description provided yet."}
-            </p>
-          </div>
-        </div>
-
-        <div className="sticky top-16 z-40 border-b border-border bg-background/95 backdrop-blur">
-          <div className="container flex flex-wrap items-center gap-2 py-2">
-            <div className="flex flex-wrap items-center gap-2">
-              {SECTIONS.map((section) => (
-                <button
-                  key={section.key}
-                  type="button"
-                  onClick={() => handleJump(section.key)}
-                  className={cn(
-                    "rounded-full border px-3 py-1 text-xs font-medium transition-colors",
-                    activeTab === section.key
-                      ? "border-primary bg-primary text-primary-foreground"
-                      : "border-border text-muted-foreground hover:text-foreground",
-                  )}
-                >
-                  {section.label}
-                </button>
-              ))}
-            </div>
-            {canEdit && (
-              <div className="ml-auto flex items-center gap-2">
-                {editing ? (
-                  <>
-                    <Button type="button" variant="secondary" size="sm" onClick={handleCancel}>
-                      Cancel
-                    </Button>
-                    <Button type="button" size="sm" onClick={handleSave} disabled={saving}>
-                      {saving ? "Saving..." : "Save"}
-                    </Button>
-                  </>
+          <div className="mb-4 space-y-3 rounded-xl border border-border bg-card/60 p-4">
+            <div className="flex items-start justify-between gap-3">
+              <div className="space-y-2">
+                {editingMeta ? (
+                  <input
+                    value={metaName}
+                    onChange={(event) => setMetaName(event.target.value)}
+                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-lg font-semibold text-foreground focus:outline-none focus:ring-2 focus:ring-ring sm:w-auto sm:min-w-[280px]"
+                    placeholder="Category name"
+                  />
                 ) : (
-                  <Button type="button" size="sm" onClick={() => setEditing(true)}>
-                    Edit
-                  </Button>
+                  <h1 className="font-display text-3xl font-bold text-foreground">{category.name}</h1>
                 )}
+
+                {editingMeta ? (
+                  <Textarea
+                    value={metaDescription}
+                    onChange={(event) => setMetaDescription(event.target.value)}
+                    placeholder="Category description (optional)"
+                    rows={3}
+                    className="max-w-2xl"
+                  />
+                ) : (
+                  <p className="text-muted-foreground">
+                    {category.description || "No description provided yet."}
+                  </p>
+                )}
+              </div>
+
+              {canEdit && !editingMeta && (
+                <button
+                  type="button"
+                  onClick={() => setEditingMeta(true)}
+                  className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-border text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                  aria-label="Edit category details"
+                >
+                  <PenLine className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+
+              {editingMeta && canEdit && (
+              <div className="flex flex-wrap items-center gap-2">
+                <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <AlertDialogTrigger asChild>
+                        <button
+                          type="button"
+                          disabled={pendingDelete || deleting}
+                          className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-destructive/40 text-destructive transition-colors hover:bg-destructive hover:text-destructive-foreground disabled:cursor-not-allowed disabled:opacity-60"
+                          aria-label="Delete category"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </AlertDialogTrigger>
+                    </TooltipTrigger>
+                    <TooltipContent>Delete</TooltipContent>
+                  </Tooltip>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Delete this category?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        This will schedule deletion. You can undo within 5 seconds.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction
+                        onClick={scheduleDelete}
+                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                      >
+                        Delete
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+                <Button type="button" variant="secondary" size="sm" onClick={handleMetaCancel}>
+                  Cancel
+                </Button>
+                <Button type="button" size="sm" onClick={handleMetaSave} disabled={savingMeta}>
+                  {savingMeta ? "Saving..." : "Save"}
+                </Button>
               </div>
             )}
           </div>
+        </div>
+
+        <FloatingNav
+          position="fixed"
+          orientation="horizontal"
+          placement="center"
+          className="top-20"
+          navItems={[
+            {
+              name: "Diagnosis",
+              link: "#diagnosis",
+              icon: <ClipboardList className="h-4 w-4" />,
+            },
+            {
+              name: "Treatment",
+              link: "#treatment",
+              icon: <Bandage className="h-4 w-4" />,
+            },
+            {
+              name: "Improvement",
+              link: "#improvement",
+              icon: <TrendingUp className="h-4 w-4" />,
+            },
+            {
+              name: "Reassessment",
+              link: "#reassessment",
+              icon: <RefreshCcw className="h-4 w-4" />,
+            },
+            {
+              name: "Trial",
+              link: "#trial",
+              icon: <FlaskConical className="h-4 w-4" />,
+            },
+          ]}
+          activeLink={`#${activeTab}`}
+          onNavigate={(link) => handleJump(link.replace("#", "") as SectionKey)}
+        />
+
+        <div className="container mt-3 flex flex-wrap items-center justify-end gap-2">
+          {canEdit && (
+            <>
+              {editing ? (
+                <>
+                  <Button type="button" variant="secondary" size="sm" onClick={handleCancel}>
+                    Cancel
+                  </Button>
+                  <Button type="button" size="sm" onClick={handleSave} disabled={saving}>
+                    {saving ? "Saving..." : "Save"}
+                  </Button>
+                </>
+              ) : (
+                <Button type="button" size="sm" onClick={() => setEditing(true)} className="gap-2">
+                  <PenLine className="h-3.5 w-3.5" />
+                  Edit
+                </Button>
+              )}
+            </>
+          )}
         </div>
 
         {error && (
@@ -239,28 +457,26 @@ const CategoryDetail = () => {
           </div>
         )}
 
-        <div className="container space-y-8 py-8">
-          {SECTIONS.map((section) => (
-            <section key={section.key} id={`section-${section.key}`} className="scroll-mt-28">
-              <h2 className="font-display text-xl font-semibold text-foreground">{section.label}</h2>
-              <div className="mt-3">
-                {editing ? (
-                  <Textarea
-                    value={draft[section.key]}
-                    onChange={(event) =>
-                      setDraft((prev) => ({ ...prev, [section.key]: event.target.value }))
-                    }
-                    placeholder={`Add ${section.label.toLowerCase()} notes...`}
-                    rows={6}
-                  />
-                ) : (
-                  <p className="text-sm leading-relaxed text-muted-foreground whitespace-pre-wrap">
-                    {draft[section.key] || "No information yet."}
-                  </p>
-                )}
-              </div>
-            </section>
-          ))}
+        <div className="container py-5">
+          <section className="rounded-2xl border border-border bg-card/70 p-4 shadow-[var(--card-shadow)]">
+            <h2 className="font-display text-xl font-semibold text-foreground">
+              {SECTIONS.find((section) => section.key === activeTab)?.label}
+            </h2>
+            <div className="mt-3">
+              {editing ? (
+                <Textarea
+                  value={draft[activeTab]}
+                  onChange={(event) => setDraft((prev) => ({ ...prev, [activeTab]: event.target.value }))}
+                  placeholder={`Add ${activeTab} notes...`}
+                  rows={8}
+                />
+              ) : (
+                <p className="text-sm leading-relaxed text-muted-foreground whitespace-pre-wrap">
+                  {draft[activeTab] || "No information yet."}
+                </p>
+              )}
+            </div>
+          </section>
         </div>
       </div>
     </Layout>
