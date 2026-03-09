@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 
 type Category = {
   id: string;
+  short_code: string;
   name: string;
   description: string | null;
 };
@@ -20,7 +21,7 @@ const Categories = () => {
   const loadCategories = useCallback(async () => {
     const { data, error } = await supabase
       .from("categories")
-      .select("id, name, description")
+      .select("id, short_code, name, description")
       .order("name", { ascending: true });
 
     if (error) {
@@ -89,6 +90,9 @@ const Categories = () => {
                 to={`/category/${category.id}`}
                 className="group rounded-2xl border border-border/70 bg-card/85 p-4 shadow-[var(--card-shadow)] transition-all hover:-translate-y-0.5 hover:shadow-[var(--card-shadow-hover)] sm:p-5"
               >
+                <span className="mb-3 inline-flex rounded-full border border-border/70 bg-muted/60 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.24em] text-muted-foreground">
+                  {category.short_code}
+                </span>
                 <h3 className="font-display text-base font-semibold text-foreground group-hover:text-primary transition-colors">
                   {category.name}
                 </h3>

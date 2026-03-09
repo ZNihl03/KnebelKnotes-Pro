@@ -4,9 +4,7 @@ import {
   ChevronRight,
   ClipboardList,
   Bandage,
-  TrendingUp,
   RefreshCcw,
-  FlaskConical,
   PenLine,
   Trash2,
 } from "lucide-react";
@@ -31,9 +29,11 @@ import {
 } from "@/components/ui/alert-dialog";
 import { richTextHasContent, sanitizeRichText, toStoredRichText } from "@/lib/richText";
 import { FloatingNav } from "@/components/ui/floating-navbar";
+import InitiationOfTreatment from "@/pages/InitiationOfTreatment";
 
 type CategoryDetailRecord = {
   id: string;
+  short_code: string;
   name: string;
   description: string | null;
   diagnosis: string | null;
@@ -43,19 +43,20 @@ type CategoryDetailRecord = {
   trial: string | null;
 };
 
-const SECTIONS = [
-  { key: "diagnosis", label: "Diagnosis" },
-  { key: "treatment", label: "Treatment" },
-  { key: "improvement", label: "Improvement" },
-  { key: "reassessment", label: "Reassessment" },
-  { key: "trial", label: "Trial" },
+const ALL_SECTION_KEYS = ["diagnosis", "treatment", "improvement", "reassessment", "trial"] as const;
+
+const VISIBLE_SECTIONS = [
+  { key: "diagnosis", label: "Diagnosis", icon: ClipboardList },
+  { key: "treatment", label: "Initiation of Treatment", icon: Bandage },
+  { key: "reassessment", label: "Assessment of Response", icon: RefreshCcw },
 ] as const;
 
-type SectionKey = (typeof SECTIONS)[number]["key"];
-type SectionDraft = Record<SectionKey, string>;
+type SectionFieldKey = (typeof ALL_SECTION_KEYS)[number];
+type SectionKey = (typeof VISIBLE_SECTIONS)[number]["key"];
+type SectionDraft = Record<SectionFieldKey, string>;
 
 const createSectionDraft = (
-  source?: Partial<Record<SectionKey, string | null | undefined>>,
+  source?: Partial<Record<SectionFieldKey, string | null | undefined>>,
 ): SectionDraft => ({
   diagnosis: sanitizeRichText(source?.diagnosis),
   treatment: sanitizeRichText(source?.treatment),
@@ -91,7 +92,7 @@ const CategoryDetail = () => {
       if (!id) return;
       const { data, error } = await supabase
         .from("categories")
-        .select("id, name, description, diagnosis, treatment, improvement, reassessment, trial")
+        .select("id, short_code, name, description, diagnosis, treatment, improvement, reassessment, trial")
         .eq("id", id)
         .maybeSingle();
 
@@ -131,6 +132,10 @@ const CategoryDetail = () => {
     setActiveTab(key);
   };
 
+  const activeSection = useMemo(
+    () => VISIBLE_SECTIONS.find((section) => section.key === activeTab) ?? VISIBLE_SECTIONS[0],
+    [activeTab],
+  );
   const activeContent = useMemo(() => sanitizeRichText(draft[activeTab]), [activeTab, draft]);
   const activeContentHasValue = useMemo(() => richTextHasContent(activeContent), [activeContent]);
 
@@ -294,12 +299,17 @@ const CategoryDetail = () => {
               Categories
             </Link>
             <ChevronRight className="h-3.5 w-3.5" />
-            <span className="text-foreground font-medium">{category.name}</span>
+            <span className="text-foreground font-medium">
+              {category.name} ({category.short_code})
+            </span>
           </nav>
 
           <div className="mb-4 space-y-3 rounded-2xl border border-border/70 bg-card/70 p-4 shadow-[var(--card-shadow)] sm:p-6">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
               <div className="space-y-2">
+                <div className="inline-flex rounded-full border border-border/70 bg-muted/60 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.24em] text-muted-foreground">
+                  {category.short_code}
+                </div>
                 {editingMeta ? (
                   <input
                     value={metaName}
@@ -409,24 +419,14 @@ const CategoryDetail = () => {
               icon: <ClipboardList className="h-4 w-4" />,
             },
             {
-              name: "Treatment",
+              name: "Initiation of Treatment",
               link: "#treatment",
               icon: <Bandage className="h-4 w-4" />,
             },
             {
-              name: "Improvement",
-              link: "#improvement",
-              icon: <TrendingUp className="h-4 w-4" />,
-            },
-            {
-              name: "Reassessment",
+              name: "Assessment of Response",
               link: "#reassessment",
               icon: <RefreshCcw className="h-4 w-4" />,
-            },
-            {
-              name: "Trial",
-              link: "#trial",
-              icon: <FlaskConical className="h-4 w-4" />,
             },
           ]}
           activeLink={`#${activeTab}`}
@@ -465,16 +465,38 @@ const CategoryDetail = () => {
 
         <div className="container py-5">
           <section className="rounded-2xl border border-border/70 bg-card/70 p-4 shadow-[var(--card-shadow)] sm:p-6">
-            <h2 className="font-display text-xl font-semibold text-foreground">
-              {SECTIONS.find((section) => section.key === activeTab)?.label}
-            </h2>
+            <h2 className="font-display text-xl font-semibold text-foreground">{activeSection.label}</h2>
             <div className="mt-3">
-              {editing ? (
+              {activeTab === "treatment" ? (
+                <div className="space-y-6">
+                  <div>
+                    {editing ? (
+                      <RichTextEditor
+                        key={activeTab}
+                        value={draft[activeTab]}
+                        onChange={(value) => setDraft((prev) => ({ ...prev, [activeTab]: value }))}
+                        placeholder={`Add ${activeSection.label.toLowerCase()} notes...`}
+                      />
+                    ) : activeContentHasValue ? (
+                      <div
+                        className="rich-text-content text-[15px] leading-relaxed text-muted-foreground sm:text-base"
+                        dangerouslySetInnerHTML={{ __html: activeContent }}
+                      />
+                    ) : (
+                      <p className="text-[15px] leading-relaxed text-muted-foreground sm:text-base">
+                        No initiation notes yet.
+                      </p>
+                    )}
+                  </div>
+
+                  <InitiationOfTreatment categoryId={category.id} categoryName={category.name} />
+                </div>
+              ) : editing ? (
                 <RichTextEditor
                   key={activeTab}
                   value={draft[activeTab]}
                   onChange={(value) => setDraft((prev) => ({ ...prev, [activeTab]: value }))}
-                  placeholder={`Add ${activeTab} notes...`}
+                  placeholder={`Add ${activeSection.label.toLowerCase()} notes...`}
                 />
               ) : (
                 <>

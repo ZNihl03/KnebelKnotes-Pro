@@ -29,10 +29,14 @@ const CreateCategory = () => {
     }
 
     setSaving(true);
-    const { error } = await supabase.from("categories").insert({
-      name: name.trim(),
-      description: description.trim() || null,
-    });
+    const { data, error } = await supabase
+      .from("categories")
+      .insert({
+        name: name.trim(),
+        description: description.trim() || null,
+      })
+      .select("id, short_code")
+      .single();
     setSaving(false);
 
     if (error) {
@@ -40,8 +44,8 @@ const CreateCategory = () => {
       return;
     }
 
-    toast.success("Category created.");
-    navigate("/categories");
+    toast.success(`Category created. Reference code: ${data.short_code}.`);
+    navigate(`/category/${data.id}`);
   };
 
   return (
@@ -83,7 +87,9 @@ const CreateCategory = () => {
             <form onSubmit={handleCreate}>
               <CardHeader>
                 <CardTitle>New Category</CardTitle>
-                <CardDescription>Provide a name and optional description.</CardDescription>
+                <CardDescription>
+                  Provide a name and optional description. A unique 5-character reference code is assigned automatically.
+                </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-2">

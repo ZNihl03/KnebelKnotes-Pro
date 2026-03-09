@@ -9,6 +9,7 @@ import { supabase } from "@/lib/supabaseClient";
 
 type CategoryResult = {
   id: string;
+  short_code: string;
   name: string;
   description: string | null;
 };
@@ -28,11 +29,13 @@ const Index = () => {
       type: "category" as const,
       label: category.name,
       id: category.id,
+      meta: category.short_code,
     }));
     const articleSuggestions = (articleResults as Article[]).map((article) => ({
       type: "article" as const,
       label: article.title,
       id: article.id,
+      meta: null,
     }));
     return [...categorySuggestions, ...articleSuggestions].slice(0, 6);
   }, [effectiveQuery, categoryResults, articleResults]);
@@ -49,8 +52,8 @@ const Index = () => {
 
       const { data, error } = await supabase
         .from("categories")
-        .select("id, name, description")
-        .or(`name.ilike.%${searchTerm}%,description.ilike.%${searchTerm}%`)
+        .select("id, short_code, name, description")
+        .or(`name.ilike.%${searchTerm}%,description.ilike.%${searchTerm}%,short_code.ilike.%${searchTerm}%`)
         .order("name", { ascending: true })
         .limit(8);
 
@@ -157,6 +160,11 @@ const Index = () => {
                             )}
                           </span>
                           <span className="flex-1 truncate">{item.label}</span>
+                          {item.meta && (
+                            <span className="rounded-full border border-border/70 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                              {item.meta}
+                            </span>
+                          )}
                           <span className="text-xs text-muted-foreground capitalize">{item.type}</span>
                         </button>
                       ))}
