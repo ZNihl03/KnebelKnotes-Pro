@@ -30,6 +30,8 @@ import {
 import { richTextHasContent, sanitizeRichText, toStoredRichText } from "@/lib/richText";
 import { FloatingNav } from "@/components/ui/floating-navbar";
 import InitiationOfTreatment from "@/pages/InitiationOfTreatment";
+import AssessmentOfResponse from "@/components/AssessmentOfResponse";
+import { ASSESSMENT_FIELD_DEFAULTS, AssessmentEditableField } from "@/lib/assessmentContent";
 
 type CategoryDetailRecord = {
   id: string;
@@ -42,9 +44,22 @@ type CategoryDetailRecord = {
   improvement: string | null;
   reassessment: string | null;
   trial: string | null;
+  assessment_initial_response: string | null;
+  assessment_change_treatment: string | null;
+  assessment_dose_optimization: string | null;
 };
 
-const ALL_SECTION_KEYS = ["diagnosis", "treatment", "patient_education", "improvement", "reassessment", "trial"] as const;
+const ALL_SECTION_KEYS = [
+  "diagnosis",
+  "treatment",
+  "patient_education",
+  "improvement",
+  "reassessment",
+  "trial",
+  "assessment_initial_response",
+  "assessment_change_treatment",
+  "assessment_dose_optimization",
+] as const;
 
 const VISIBLE_SECTIONS = [
   { key: "diagnosis", label: "Diagnosis", icon: ClipboardList },
@@ -56,6 +71,17 @@ type SectionFieldKey = (typeof ALL_SECTION_KEYS)[number];
 type SectionKey = (typeof VISIBLE_SECTIONS)[number]["key"];
 type SectionDraft = Record<SectionFieldKey, string>;
 
+const BASE_CATEGORY_SELECT =
+  "id, short_code, name, description, diagnosis, treatment, patient_education, improvement, reassessment, trial";
+const EXTENDED_CATEGORY_SELECT = `${BASE_CATEGORY_SELECT}, assessment_initial_response, assessment_change_treatment, assessment_dose_optimization`;
+
+const isMissingAssessmentColumnError = (message?: string) =>
+  [
+    "assessment_initial_response",
+    "assessment_change_treatment",
+    "assessment_dose_optimization",
+  ].some((column) => message?.includes(column));
+
 const createSectionDraft = (
   source?: Partial<Record<SectionFieldKey, string | null | undefined>>,
 ): SectionDraft => ({
@@ -65,6 +91,25 @@ const createSectionDraft = (
   improvement: sanitizeRichText(source?.improvement),
   reassessment: sanitizeRichText(source?.reassessment),
   trial: sanitizeRichText(source?.trial),
+  assessment_initial_response: sanitizeRichText(source?.assessment_initial_response),
+  assessment_change_treatment: sanitizeRichText(source?.assessment_change_treatment),
+  assessment_dose_optimization: sanitizeRichText(source?.assessment_dose_optimization),
+});
+
+const ASSESSMENT_SECTION_FIELDS = [
+  "reassessment",
+  "assessment_initial_response",
+  "assessment_change_treatment",
+  "assessment_dose_optimization",
+] as const;
+
+type AssessmentSectionField = (typeof ASSESSMENT_SECTION_FIELDS)[number];
+
+const createAssessmentEditingState = (): Record<AssessmentSectionField, boolean> => ({
+  reassessment: false,
+  assessment_initial_response: false,
+  assessment_change_treatment: false,
+  assessment_dose_optimization: false,
 });
 
 const getSectionFromHash = (hash: string): SectionKey | null => {
@@ -86,6 +131,11 @@ const CategoryDetail = () => {
   const [editingTreatmentNotes, setEditingTreatmentNotes] = useState(false);
   const [editingPatientEducation, setEditingPatientEducation] = useState(false);
   const [savingTreatmentSection, setSavingTreatmentSection] = useState<"treatment" | "patient_education" | null>(null);
+  const [editingAssessmentSections, setEditingAssessmentSections] = useState<Record<AssessmentSectionField, boolean>>(
+    createAssessmentEditingState(),
+  );
+  const [savingAssessmentSection, setSavingAssessmentSection] = useState<AssessmentSectionField | null>(null);
+  const [assessmentResponseFieldsAvailable, setAssessmentResponseFieldsAvailable] = useState(true);
   const [deleting, setDeleting] = useState(false);
   const [pendingDelete, setPendingDelete] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -103,29 +153,60 @@ const CategoryDetail = () => {
 
     const loadCategory = async () => {
       if (!id) return;
-      const { data, error } = await supabase
+
+      let categoryData: CategoryDetailRecord | null = null;
+      let queryError: { message: string } | null = null;
+      let nextAssessmentResponseFieldsAvailable = true;
+
+      const extendedResponse = await supabase
         .from("categories")
-        .select("id, short_code, name, description, diagnosis, treatment, patient_education, improvement, reassessment, trial")
+        .select(EXTENDED_CATEGORY_SELECT)
         .eq("id", id)
         .maybeSingle();
 
+      if (extendedResponse.error && isMissingAssessmentColumnError(extendedResponse.error.message)) {
+        nextAssessmentResponseFieldsAvailable = false;
+
+        const fallbackResponse = await supabase
+          .from("categories")
+          .select(BASE_CATEGORY_SELECT)
+          .eq("id", id)
+          .maybeSingle();
+
+        queryError = fallbackResponse.error ? { message: fallbackResponse.error.message } : null;
+        categoryData = fallbackResponse.data
+          ? {
+              ...fallbackResponse.data,
+              assessment_initial_response: null,
+              assessment_change_treatment: null,
+              assessment_dose_optimization: null,
+            }
+          : null;
+      } else {
+        queryError = extendedResponse.error ? { message: extendedResponse.error.message } : null;
+        categoryData = extendedResponse.data as CategoryDetailRecord | null;
+      }
+
       if (!isMounted) return;
-      if (error) {
-        setError(error.message);
+      setAssessmentResponseFieldsAvailable(nextAssessmentResponseFieldsAvailable);
+
+      if (queryError) {
+        setError(queryError.message);
         setLoading(false);
         return;
       }
 
-      if (!data) {
+      if (!categoryData) {
         setCategory(null);
         setLoading(false);
         return;
       }
 
-      setCategory(data);
-      setDraft(createSectionDraft(data));
-      setMetaName(data.name ?? "");
-      setMetaDescription(data.description ?? "");
+      setCategory(categoryData);
+      setDraft(createSectionDraft(categoryData));
+      setEditingAssessmentSections(createAssessmentEditingState());
+      setMetaName(categoryData.name ?? "");
+      setMetaDescription(categoryData.description ?? "");
       setLoading(false);
     };
 
@@ -143,6 +224,13 @@ const CategoryDetail = () => {
 
   const handleJump = (key: SectionKey) => {
     setActiveTab(key);
+    navigate(
+      {
+        pathname: location.pathname,
+        hash: key,
+      },
+      { replace: true },
+    );
   };
 
   const activeSection = useMemo(
@@ -176,6 +264,9 @@ const CategoryDetail = () => {
       improvement: toStoredRichText(nextDraft.improvement),
       reassessment: toStoredRichText(nextDraft.reassessment),
       trial: toStoredRichText(nextDraft.trial),
+      assessment_initial_response: toStoredRichText(nextDraft.assessment_initial_response),
+      assessment_change_treatment: toStoredRichText(nextDraft.assessment_change_treatment),
+      assessment_dose_optimization: toStoredRichText(nextDraft.assessment_dose_optimization),
     };
 
     setSaving(true);
@@ -242,6 +333,80 @@ const CategoryDetail = () => {
     }
 
     setEditingPatientEducation(false);
+  };
+
+  const handleAssessmentSectionStartEditing = (field: AssessmentSectionField) => {
+    if (field !== "reassessment" && !assessmentResponseFieldsAvailable) {
+      toast.error("Run the latest assessment response migration in Supabase to edit this section.");
+      return;
+    }
+
+    setDraft((prev) => {
+      if (field === "reassessment" || richTextHasContent(prev[field])) {
+        return prev;
+      }
+
+      return {
+        ...prev,
+        [field]: ASSESSMENT_FIELD_DEFAULTS[field as AssessmentEditableField],
+      };
+    });
+
+    setEditingAssessmentSections((prev) => ({
+      ...prev,
+      [field]: true,
+    }));
+  };
+
+  const handleAssessmentSectionCancel = (field: AssessmentSectionField) => {
+    if (!category) return;
+
+    setDraft((prev) => ({
+      ...prev,
+      [field]: sanitizeRichText(category[field]),
+    }));
+    setEditingAssessmentSections((prev) => ({
+      ...prev,
+      [field]: false,
+    }));
+  };
+
+  const handleAssessmentSectionSave = async (field: AssessmentSectionField) => {
+    if (!category) return;
+    if (field !== "reassessment" && !assessmentResponseFieldsAvailable) {
+      toast.error("Run the latest assessment response migration in Supabase to save this section.");
+      return;
+    }
+
+    let normalizedValue = sanitizeRichText(draft[field]);
+
+    if (field !== "reassessment" && !richTextHasContent(normalizedValue)) {
+      normalizedValue = ASSESSMENT_FIELD_DEFAULTS[field as AssessmentEditableField];
+    }
+
+    const payload = {
+      [field]: toStoredRichText(normalizedValue),
+    };
+
+    setSavingAssessmentSection(field);
+    const { error } = await supabase.from("categories").update(payload).eq("id", category.id);
+    setSavingAssessmentSection(null);
+
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+
+    toast.success("Category updated.");
+    setDraft((prev) => ({
+      ...prev,
+      [field]: normalizedValue,
+    }));
+    setCategory((prev) => (prev ? { ...prev, ...payload } : prev));
+    setEditingAssessmentSections((prev) => ({
+      ...prev,
+      [field]: false,
+    }));
   };
 
   const handleMetaSave = async () => {
@@ -581,6 +746,7 @@ const CategoryDetail = () => {
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <h2 className="font-display text-xl font-semibold text-foreground">{activeSection.label}</h2>
                 {canEdit &&
+                  activeTab !== "reassessment" &&
                   (editing ? (
                     <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center">
                       <Button
@@ -637,6 +803,52 @@ const CategoryDetail = () => {
                   onPatientEducationContentChange={(value) =>
                     setDraft((prev) => ({ ...prev, patient_education: value }))
                   }
+                />
+              ) : activeTab === "reassessment" ? (
+                <AssessmentOfResponse
+                  notesSection={{
+                    content: draft.reassessment,
+                    canEdit,
+                    isEditing: editingAssessmentSections.reassessment,
+                    isSaving: savingAssessmentSection === "reassessment",
+                    onStartEditing: () => handleAssessmentSectionStartEditing("reassessment"),
+                    onCancelEditing: () => handleAssessmentSectionCancel("reassessment"),
+                    onSave: () => void handleAssessmentSectionSave("reassessment"),
+                    onContentChange: (value) => setDraft((prev) => ({ ...prev, reassessment: value })),
+                  }}
+                  initialResponseSection={{
+                    content: draft.assessment_initial_response,
+                    canEdit,
+                    isEditing: editingAssessmentSections.assessment_initial_response,
+                    isSaving: savingAssessmentSection === "assessment_initial_response",
+                    onStartEditing: () => handleAssessmentSectionStartEditing("assessment_initial_response"),
+                    onCancelEditing: () => handleAssessmentSectionCancel("assessment_initial_response"),
+                    onSave: () => void handleAssessmentSectionSave("assessment_initial_response"),
+                    onContentChange: (value) =>
+                      setDraft((prev) => ({ ...prev, assessment_initial_response: value })),
+                  }}
+                  changeTreatmentSection={{
+                    content: draft.assessment_change_treatment,
+                    canEdit,
+                    isEditing: editingAssessmentSections.assessment_change_treatment,
+                    isSaving: savingAssessmentSection === "assessment_change_treatment",
+                    onStartEditing: () => handleAssessmentSectionStartEditing("assessment_change_treatment"),
+                    onCancelEditing: () => handleAssessmentSectionCancel("assessment_change_treatment"),
+                    onSave: () => void handleAssessmentSectionSave("assessment_change_treatment"),
+                    onContentChange: (value) =>
+                      setDraft((prev) => ({ ...prev, assessment_change_treatment: value })),
+                  }}
+                  doseOptimizationSection={{
+                    content: draft.assessment_dose_optimization,
+                    canEdit,
+                    isEditing: editingAssessmentSections.assessment_dose_optimization,
+                    isSaving: savingAssessmentSection === "assessment_dose_optimization",
+                    onStartEditing: () => handleAssessmentSectionStartEditing("assessment_dose_optimization"),
+                    onCancelEditing: () => handleAssessmentSectionCancel("assessment_dose_optimization"),
+                    onSave: () => void handleAssessmentSectionSave("assessment_dose_optimization"),
+                    onContentChange: (value) =>
+                      setDraft((prev) => ({ ...prev, assessment_dose_optimization: value })),
+                  }}
                 />
               ) : editing ? (
                 <RichTextEditor
