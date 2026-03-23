@@ -10,8 +10,8 @@ const Footer = () => (
       <div className="grid gap-6 md:grid-cols-3 md:gap-8">
         <div>
           <div className="flex items-center gap-2 mb-3">
-            <img src={knebelLogo} alt="Knebel Knebel Knotes logo" className="h-8 w-8" />
-            <span className="font-display text-lg font-bold text-foreground">Knebel Knebel Knotes</span>
+            <img src={knebelLogo} alt="Knebel Knotes logo" className="h-8 w-8" />
+            <span className="font-display text-lg font-bold text-foreground">Knebel Knotes</span>
           </div>
           <p className="text-sm text-muted-foreground leading-relaxed">
             A comprehensive clinical psychiatry reference for practitioners. Evidence-based diagnostic criteria,
@@ -45,7 +45,7 @@ const Footer = () => (
         </div>
       </div>
       <div className="mt-8 border-t border-border/70 pt-6 text-center text-xs text-muted-foreground">
-        © {new Date().getFullYear()} Knebel Knebel Knotes. All rights reserved.
+        © {new Date().getFullYear()} Knebel Knotes. All rights reserved.
       </div>
     </div>
   </footer>

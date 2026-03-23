@@ -44,7 +44,7 @@ const Login = () => {
           <div className="mb-6 text-center">
             <h1 className="font-display text-2xl font-bold text-foreground sm:text-3xl">Log in</h1>
             <p className="mt-2 text-sm text-muted-foreground">
-              Access your Knebel Knebel Knotes account.
+              Access your Knebel Knotes account.
             </p>
           </div>
 

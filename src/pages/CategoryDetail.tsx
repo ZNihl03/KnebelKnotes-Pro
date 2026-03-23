@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import {
+  ChevronLeft,
   ChevronRight,
   ClipboardList,
   Bandage,
+  Pill,
   RefreshCcw,
   PenLine,
   Trash2,
@@ -32,6 +34,7 @@ import { FloatingNav } from "@/components/ui/floating-navbar";
 import InitiationOfTreatment from "@/pages/InitiationOfTreatment";
 import AssessmentOfResponse from "@/components/AssessmentOfResponse";
 import { ASSESSMENT_FIELD_DEFAULTS, AssessmentEditableField } from "@/lib/assessmentContent";
+import { useUiPreferences } from "@/contexts/UiPreferencesContext";
 
 type CategoryDetailRecord = {
   id: string;
@@ -65,6 +68,7 @@ const VISIBLE_SECTIONS = [
   { key: "diagnosis", label: "Diagnosis", icon: ClipboardList },
   { key: "treatment", label: "Initiation of Treatment", icon: Bandage },
   { key: "reassessment", label: "Assessment of Response", icon: RefreshCcw },
+  { key: "antidepressant-augment", label: "Antidepressant Augment", icon: Pill },
 ] as const;
 
 type SectionFieldKey = (typeof ALL_SECTION_KEYS)[number];
@@ -105,6 +109,8 @@ const ASSESSMENT_SECTION_FIELDS = [
 
 type AssessmentSectionField = (typeof ASSESSMENT_SECTION_FIELDS)[number];
 
+const isAssessmentTab = (key: SectionKey) => key === "reassessment" || key === "antidepressant-augment";
+
 const createAssessmentEditingState = (): Record<AssessmentSectionField, boolean> => ({
   reassessment: false,
   assessment_initial_response: false,
@@ -122,6 +128,7 @@ const CategoryDetail = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { profile, loading: authLoading } = useAuth();
+  const { showCategoryIds } = useUiPreferences();
   const [category, setCategory] = useState<CategoryDetailRecord | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -237,7 +244,20 @@ const CategoryDetail = () => {
     () => VISIBLE_SECTIONS.find((section) => section.key === activeTab) ?? VISIBLE_SECTIONS[0],
     [activeTab],
   );
-  const activeContent = useMemo(() => sanitizeRichText(draft[activeTab]), [activeTab, draft]);
+  const activeSectionIndex = useMemo(
+    () => VISIBLE_SECTIONS.findIndex((section) => section.key === activeTab),
+    [activeTab],
+  );
+  const previousSection = activeSectionIndex > 0 ? VISIBLE_SECTIONS[activeSectionIndex - 1] : null;
+  const nextSection =
+    activeSectionIndex >= 0 && activeSectionIndex < VISIBLE_SECTIONS.length - 1
+      ? VISIBLE_SECTIONS[activeSectionIndex + 1]
+      : null;
+  const activeContentField = useMemo<SectionFieldKey>(
+    () => (activeTab === "antidepressant-augment" ? "reassessment" : activeTab),
+    [activeTab],
+  );
+  const activeContent = useMemo(() => sanitizeRichText(draft[activeContentField]), [activeContentField, draft]);
   const activeContentHasValue = useMemo(() => richTextHasContent(activeContent), [activeContent]);
 
   useEffect(() => {
@@ -593,16 +613,19 @@ const CategoryDetail = () => {
             </Link>
             <ChevronRight className="h-3.5 w-3.5" />
             <span className="text-foreground font-medium">
-              {category.name} ({category.short_code})
+              {category.name}
+              {showCategoryIds ? ` (${category.short_code})` : ""}
             </span>
           </nav>
 
           <div className="mb-4 space-y-3 rounded-2xl border border-border/70 bg-card/70 p-4 shadow-[var(--card-shadow)] sm:p-6">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
               <div className="space-y-2">
-                <div className="inline-flex rounded-full border border-border/70 bg-muted/60 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.24em] text-muted-foreground">
-                  {category.short_code}
-                </div>
+                {showCategoryIds && (
+                  <div className="inline-flex rounded-full border border-border/70 bg-muted/60 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.24em] text-muted-foreground">
+                    {category.short_code}
+                  </div>
+                )}
                 {editingMeta ? (
                   <input
                     value={metaName}
@@ -721,6 +744,11 @@ const CategoryDetail = () => {
               link: "#reassessment",
               icon: <RefreshCcw className="h-4 w-4" />,
             },
+            {
+              name: "Antidepressant Augment",
+              link: "#antidepressant-augment",
+              icon: <Pill className="h-4 w-4" />,
+            },
           ]}
           activeLink={`#${activeTab}`}
           onNavigate={(link) => handleJump(link.replace("#", "") as SectionKey)}
@@ -742,11 +770,10 @@ const CategoryDetail = () => {
                 : "rounded-2xl border border-border/70 bg-card/70 p-4 shadow-[var(--card-shadow)] sm:p-6"
             }
           >
-            {activeTab !== "treatment" && (
+            {activeTab !== "treatment" && !isAssessmentTab(activeTab) && (
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <h2 className="font-display text-xl font-semibold text-foreground">{activeSection.label}</h2>
                 {canEdit &&
-                  activeTab !== "reassessment" &&
                   (editing ? (
                     <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center">
                       <Button
@@ -804,7 +831,7 @@ const CategoryDetail = () => {
                     setDraft((prev) => ({ ...prev, patient_education: value }))
                   }
                 />
-              ) : activeTab === "reassessment" ? (
+              ) : isAssessmentTab(activeTab) ? (
                 <AssessmentOfResponse
                   notesSection={{
                     content: draft.reassessment,
@@ -849,6 +876,7 @@ const CategoryDetail = () => {
                     onContentChange: (value) =>
                       setDraft((prev) => ({ ...prev, assessment_dose_optimization: value })),
                   }}
+                  notesOnly={activeTab === "antidepressant-augment"}
                 />
               ) : editing ? (
                 <RichTextEditor
@@ -871,6 +899,35 @@ const CategoryDetail = () => {
                   )}
                 </>
               )}
+            </div>
+
+            <div className="mt-6 flex flex-col gap-3 rounded-2xl border border-border/70 bg-card/60 p-4 shadow-[var(--card-shadow)] sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-sm text-muted-foreground">
+                Tab {activeSectionIndex + 1} of {VISIBLE_SECTIONS.length}: {activeSection.label}
+              </p>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => previousSection && handleJump(previousSection.key)}
+                  disabled={!previousSection}
+                  className="w-full sm:w-auto"
+                  aria-label={previousSection ? `Back: ${previousSection.label}` : "Back"}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                  {previousSection ? `Back: ${previousSection.label}` : "Back"}
+                </Button>
+                <Button
+                  type="button"
+                  onClick={() => nextSection && handleJump(nextSection.key)}
+                  disabled={!nextSection}
+                  className="w-full sm:w-auto"
+                  aria-label={nextSection ? `Next: ${nextSection.label}` : "Next"}
+                >
+                  {nextSection ? `Next: ${nextSection.label}` : "Next"}
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
           </section>
         </div>

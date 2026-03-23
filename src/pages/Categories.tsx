@@ -4,6 +4,7 @@ import { X } from "lucide-react";
 import Layout from "@/components/Layout";
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/contexts/AuthContext";
+import { useUiPreferences } from "@/contexts/UiPreferencesContext";
 import { Button } from "@/components/ui/button";
 
 type Category = {
@@ -15,6 +16,7 @@ type Category = {
 
 const Categories = () => {
   const { user, profile, loading: authLoading } = useAuth();
+  const { showCategoryIds } = useUiPreferences();
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -110,9 +112,11 @@ const Categories = () => {
                 to={`/category/${category.id}`}
                 className="group rounded-2xl border border-border/70 bg-card/85 p-4 shadow-[var(--card-shadow)] transition-all hover:-translate-y-0.5 hover:shadow-[var(--card-shadow-hover)] sm:p-5"
               >
-                <span className="mb-3 inline-flex rounded-full border border-border/70 bg-muted/60 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.24em] text-muted-foreground">
-                  {category.short_code}
-                </span>
+                {showCategoryIds && (
+                  <span className="mb-3 inline-flex rounded-full border border-border/70 bg-muted/60 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.24em] text-muted-foreground">
+                    {category.short_code}
+                  </span>
+                )}
                 <h3 className="font-display text-base font-semibold text-foreground group-hover:text-primary transition-colors">
                   {category.name}
                 </h3>

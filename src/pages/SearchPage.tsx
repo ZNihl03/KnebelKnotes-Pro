@@ -10,6 +10,7 @@ import {
   searchTreatmentMedications,
   type MedicationSearchResult,
 } from "@/lib/treatmentSearch";
+import { useUiPreferences } from "@/contexts/UiPreferencesContext";
 
 type CategoryResult = {
   id: string;
@@ -19,6 +20,7 @@ type CategoryResult = {
 };
 
 const SearchPage = () => {
+  const { showCategoryIds } = useUiPreferences();
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const paramQuery = searchParams.get("q") || "";
@@ -47,7 +49,7 @@ const SearchPage = () => {
       label: result.drug_name,
       id: `${result.category_id}-${result.drug_name}`,
       detail: `${result.category_name} • ${formatTreatmentLines(result.line_numbers)}`,
-      meta: result.category_short_code,
+      meta: showCategoryIds ? result.category_short_code : null,
       route: `/category/${result.category_id}#treatment`,
     }));
     const categorySuggestions = categoryResults.map((category) => ({
@@ -55,7 +57,7 @@ const SearchPage = () => {
       label: category.name,
       id: category.id,
       detail: null,
-      meta: category.short_code,
+      meta: showCategoryIds ? category.short_code : null,
       route: null,
     }));
     const articleSuggestions = (results as Article[]).map((article) => ({
@@ -67,7 +69,7 @@ const SearchPage = () => {
       route: null,
     }));
     return [...medicationSuggestions, ...categorySuggestions, ...articleSuggestions].slice(0, 8);
-  }, [effectiveQuery, medicationResults, categoryResults, results]);
+  }, [effectiveQuery, medicationResults, categoryResults, results, showCategoryIds]);
 
   useEffect(() => {
     let isMounted = true;
@@ -255,9 +257,11 @@ const SearchPage = () => {
                         <p className="font-medium text-foreground group-hover:text-primary transition-colors">
                           {result.drug_name}
                         </p>
-                        <span className="inline-flex rounded-full border border-border/70 bg-muted/50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                          {result.category_short_code}
-                        </span>
+                        {showCategoryIds && (
+                          <span className="inline-flex rounded-full border border-border/70 bg-muted/50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                            {result.category_short_code}
+                          </span>
+                        )}
                       </div>
                       <p className="text-sm text-muted-foreground">
                         Used in <span className="font-medium text-foreground">{result.category_name}</span> under{" "}
@@ -286,9 +290,11 @@ const SearchPage = () => {
                       <Folder className="h-3.5 w-3.5" />
                     </span>
                     <div>
-                      <p className="mb-1 inline-flex rounded-full border border-border/70 bg-muted/50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                        {category.short_code}
-                      </p>
+                      {showCategoryIds && (
+                        <p className="mb-1 inline-flex rounded-full border border-border/70 bg-muted/50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                          {category.short_code}
+                        </p>
+                      )}
                       <p className="font-medium text-foreground group-hover:text-primary transition-colors">
                         {category.name}
                       </p>

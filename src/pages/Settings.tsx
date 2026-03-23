@@ -9,10 +9,12 @@ import { toast } from "@/components/ui/sonner";
 import { Badge } from "@/components/ui/badge";
 import ProfileImageUploader from "@/components/ProfileImageUploader";
 import { useAuth } from "@/contexts/AuthContext";
+import { useUiPreferences } from "@/contexts/UiPreferencesContext";
 import { supabase } from "@/lib/supabaseClient";
 import { createSubAdmin } from "@/lib/adminApi";
 import { format } from "date-fns";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Switch } from "@/components/ui/switch";
 
 type SubAdmin = {
   id: string;
@@ -25,6 +27,7 @@ type SubAdmin = {
 
 const Settings = () => {
   const { user, profile, loading, refreshProfile } = useAuth();
+  const { showCategoryIds, setShowCategoryIds } = useUiPreferences();
   const role = profile?.role;
   const isSuperAdmin = role === "super_admin";
   const isSubAdmin = role === "sub_admin";
@@ -217,6 +220,31 @@ const Settings = () => {
                       ? "Limited access within assigned scope."
                       : "Contact a Super Admin for access."}
                 </p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Display Preferences</CardTitle>
+                <CardDescription>Choose which category metadata is visible across the app.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="flex flex-col gap-4 rounded-xl border border-border/70 bg-muted/30 p-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="space-y-1">
+                    <Label htmlFor="show-category-ids" className="text-sm font-medium text-foreground">
+                      Show category IDs
+                    </Label>
+                    <p className="text-sm text-muted-foreground">
+                      Display category short codes next to category names in the header, category pages, and search results.
+                    </p>
+                  </div>
+                  <Switch
+                    id="show-category-ids"
+                    checked={showCategoryIds}
+                    onCheckedChange={setShowCategoryIds}
+                    aria-label="Show category IDs"
+                  />
+                </div>
               </CardContent>
             </Card>
 

@@ -23,6 +23,7 @@ type AssessmentOfResponseProps = {
   initialResponseSection: EditableAssessmentSection;
   changeTreatmentSection: EditableAssessmentSection;
   doseOptimizationSection: EditableAssessmentSection;
+  notesOnly?: boolean;
 };
 
 type ResponseScenario = "" | "persistent_tolerability" | "less_than_20" | "greater_or_equal_20";
@@ -38,6 +39,7 @@ const AssessmentOfResponse = ({
   initialResponseSection,
   changeTreatmentSection,
   doseOptimizationSection,
+  notesOnly = false,
 }: AssessmentOfResponseProps) => {
   const [scenario, setScenario] = useState<ResponseScenario>("");
   const normalizedNotesContent = useMemo(() => sanitizeRichText(notesSection.content), [notesSection.content]);
@@ -104,36 +106,66 @@ const AssessmentOfResponse = ({
     );
   };
 
+  const renderResponsePatternSelector = () => (
+    <div className="max-w-xl space-y-2">
+      <label htmlFor="assessment-response-scenario" className="text-sm font-medium text-foreground">
+        Current response pattern
+      </label>
+      <div className="relative">
+        <select
+          id="assessment-response-scenario"
+          value={scenario}
+          onChange={(event) => setScenario(event.target.value as ResponseScenario)}
+          className="flex h-11 w-full appearance-none rounded-lg border border-input bg-background px-3 pr-10 text-sm text-foreground shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+        >
+          <option value="">Select an option</option>
+          <option value="persistent_tolerability">Persistent issues with tolerability</option>
+          <option value="less_than_20">If &lt;20% reduction</option>
+          <option value="greater_or_equal_20">If ≥20% reduction</option>
+        </select>
+        <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+      </div>
+    </div>
+  );
+
+  const notesCard = (
+    <div className="rounded-2xl border border-border/70 bg-card/60 p-4 shadow-[var(--card-shadow)] sm:p-5">
+      <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="space-y-1">
+          <div className="inline-flex rounded-full border border-border/70 bg-muted/50 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.24em] text-muted-foreground">
+            Notes
+          </div>
+          <h3 className="font-display text-lg font-semibold text-foreground sm:text-xl">
+            Additional assessment notes
+          </h3>
+        </div>
+        {renderCardActions(notesSection)}
+      </div>
+
+      {notesSection.isEditing ? (
+        <RichTextEditor
+          value={notesSection.content}
+          onChange={notesSection.onContentChange}
+          placeholder="Add assessment of response notes..."
+        />
+      ) : hasNotes ? (
+        <div
+          className={`rich-text-content ${cardBodyClassName}`}
+          dangerouslySetInnerHTML={{ __html: normalizedNotesContent }}
+        />
+      ) : (
+        <p className={cardBodyClassName}>No information yet.</p>
+      )}
+    </div>
+  );
+
+  if (notesOnly) {
+    return <div className="space-y-4">{notesCard}</div>;
+  }
+
   return (
     <div className="space-y-4">
-      <div className="rounded-2xl border border-border/70 bg-card/60 p-4 shadow-[var(--card-shadow)] sm:p-5">
-        <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div className="space-y-1">
-            <div className="inline-flex rounded-full border border-border/70 bg-muted/50 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.24em] text-muted-foreground">
-              Notes
-            </div>
-            <h3 className="font-display text-lg font-semibold text-foreground sm:text-xl">
-              Additional assessment notes
-            </h3>
-          </div>
-          {renderCardActions(notesSection)}
-        </div>
-
-        {notesSection.isEditing ? (
-          <RichTextEditor
-            value={notesSection.content}
-            onChange={notesSection.onContentChange}
-            placeholder="Add assessment of response notes..."
-          />
-        ) : hasNotes ? (
-          <div
-            className={`rich-text-content ${cardBodyClassName}`}
-            dangerouslySetInnerHTML={{ __html: normalizedNotesContent }}
-          />
-        ) : (
-          <p className={cardBodyClassName}>No information yet.</p>
-        )}
-      </div>
+      {notesCard}
 
       <div className="rounded-2xl border border-border/70 bg-card/60 p-4 shadow-[var(--card-shadow)] sm:p-5">
         <div className="space-y-4">
@@ -155,25 +187,7 @@ const AssessmentOfResponse = ({
             displayInitialResponseContent,
           )}
 
-          <div className="max-w-xl space-y-2">
-            <label htmlFor="assessment-response-scenario" className="text-sm font-medium text-foreground">
-              Current response pattern
-            </label>
-            <div className="relative">
-              <select
-                id="assessment-response-scenario"
-                value={scenario}
-                onChange={(event) => setScenario(event.target.value as ResponseScenario)}
-                className="flex h-11 w-full appearance-none rounded-lg border border-input bg-background px-3 pr-10 text-sm text-foreground shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-              >
-                <option value="">Select an option</option>
-                <option value="persistent_tolerability">Persistent issues with tolerability</option>
-                <option value="less_than_20">If &lt;20% reduction</option>
-                <option value="greater_or_equal_20">If ≥20% reduction</option>
-              </select>
-              <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            </div>
-          </div>
+          {renderResponsePatternSelector()}
         </div>
       </div>
 

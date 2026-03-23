@@ -11,6 +11,7 @@ import {
   searchTreatmentMedications,
   type MedicationSearchResult,
 } from "@/lib/treatmentSearch";
+import { useUiPreferences } from "@/contexts/UiPreferencesContext";
 
 type CategoryResult = {
   id: string;
@@ -20,6 +21,7 @@ type CategoryResult = {
 };
 
 const Index = () => {
+  const { showCategoryIds } = useUiPreferences();
   const [query, setQuery] = useState("");
   const [categoryResults, setCategoryResults] = useState<CategoryResult[]>([]);
   const [medicationResults, setMedicationResults] = useState<MedicationSearchResult[]>([]);
@@ -36,7 +38,7 @@ const Index = () => {
       label: result.drug_name,
       id: `${result.category_id}-${result.drug_name}`,
       detail: `${result.category_name} • ${formatTreatmentLines(result.line_numbers)}`,
-      meta: result.category_short_code,
+      meta: showCategoryIds ? result.category_short_code : null,
       route: `/category/${result.category_id}#treatment`,
     }));
     const categorySuggestions = categoryResults.map((category) => ({
@@ -44,7 +46,7 @@ const Index = () => {
       label: category.name,
       id: category.id,
       detail: null,
-      meta: category.short_code,
+      meta: showCategoryIds ? category.short_code : null,
       route: null,
     }));
     const articleSuggestions = (articleResults as Article[]).map((article) => ({
@@ -56,7 +58,7 @@ const Index = () => {
       route: null,
     }));
     return [...medicationSuggestions, ...categorySuggestions, ...articleSuggestions].slice(0, 6);
-  }, [effectiveQuery, medicationResults, categoryResults, articleResults]);
+  }, [effectiveQuery, medicationResults, categoryResults, articleResults, showCategoryIds]);
 
   useEffect(() => {
     let isMounted = true;

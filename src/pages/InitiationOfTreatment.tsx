@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { format } from "date-fns";
 import { z } from "zod";
@@ -395,6 +395,7 @@ const InitiationOfTreatment = ({
   const [selectedLine, setSelectedLine] = useState("");
   const [selectedMedicationId, setSelectedMedicationId] = useState("");
   const [isLineTableCollapsed, setIsLineTableCollapsed] = useState(false);
+  const medicationSelectionSectionRef = useRef<HTMLElement | null>(null);
 
   const canApprove = profile?.role === "super_admin";
   const canPropose = profile?.role === "sub_admin";
@@ -562,6 +563,17 @@ const InitiationOfTreatment = ({
     setSelectedMedicationId("");
     setIsLineTableCollapsed(false);
   };
+
+  const handleMedicationSelection = useCallback((value: string, shouldScroll = false) => {
+    setSelectedMedicationId(value);
+
+    if (shouldScroll) {
+      medicationSelectionSectionRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    }
+  }, []);
 
   const openEditDialog = (row: AntidepressantMasterRow) => {
     if (!canEditRows) {
@@ -796,7 +808,20 @@ const InitiationOfTreatment = ({
           <TableBody>
             {lineRows.map((row) => (
               <TableRow key={row.id}>
-                <TableCell className="font-medium text-foreground">{row.drug_name}</TableCell>
+                <TableCell>
+                  <button
+                    type="button"
+                    className={`text-left font-medium transition-all duration-200 focus-visible:outline-none ${
+                      selectedMedicationId === row.id
+                        ? "text-primary [text-shadow:0_0_14px_hsl(var(--primary)/0.35)]"
+                        : "text-foreground hover:text-primary hover:[text-shadow:0_0_14px_hsl(var(--primary)/0.35)] focus-visible:text-primary focus-visible:[text-shadow:0_0_14px_hsl(var(--primary)/0.35)]"
+                    }`}
+                    aria-label={`Select medication ${row.drug_name}`}
+                    onClick={() => handleMedicationSelection(row.id, true)}
+                  >
+                    {row.drug_name}
+                  </button>
+                </TableCell>
                 <TableCell>{formatMedicationType(row.medication_type)}</TableCell>
                 <TableCell>{row.frequency || "Not set"}</TableCell>
                 <TableCell>{formatDoseCellValue(row.initiation_dose_mg)}</TableCell>
@@ -900,6 +925,75 @@ const InitiationOfTreatment = ({
               {!rowsError && rows.length > 0 && (
                 <>
                   <Card className="border-dashed border-border/80 bg-muted/15 shadow-none">
+                    <CardContent className="space-y-4 p-4 sm:p-6">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2">
+                            <h2 className="font-display text-2xl font-semibold text-foreground">
+                              Factors to consider
+                            </h2>
+                            {canEditContent &&
+                              (isEditingFactors ? (
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <Button
+                                    type="button"
+                                    variant="secondary"
+                                    size="sm"
+                                    onClick={onCancelEditingFactors}
+                                    disabled={isSavingFactors}
+                                  >
+                                    Cancel
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    onClick={onSaveFactors}
+                                    disabled={isSavingFactors}
+                                  >
+                                    {isSavingFactors ? "Saving..." : "Save"}
+                                  </Button>
+                                </div>
+                              ) : (
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8"
+                                  aria-label="Edit factors to consider"
+                                  onClick={onStartEditingFactors}
+                                >
+                                  <PencilLine className="h-4 w-4" />
+                                </Button>
+                              ))}
+                          </div>
+                          <p className="text-sm text-muted-foreground">
+                            Review these category-level considerations before selecting a treatment line and starting dose.
+                          </p>
+                        </div>
+                      </div>
+
+                      {isEditingFactors ? (
+                        <RichTextEditor
+                          value={factorsContent}
+                          onChange={(value) => onFactorsContentChange?.(value)}
+                          placeholder="Add factors to consider notes..."
+                        />
+                      ) : factorsContentHasValue ? (
+                        <div className="rounded-2xl border border-border/70 bg-background/80 p-4">
+                          <div
+                            className="rich-text-content text-[15px] leading-relaxed text-muted-foreground sm:text-base"
+                            dangerouslySetInnerHTML={{ __html: factorsContent }}
+                          />
+                        </div>
+                      ) : (
+                        <div className="rounded-xl border border-dashed border-border/80 p-6 text-sm text-muted-foreground">
+                          No factors to consider notes yet.
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+
+                  <Card className="border-dashed border-border/80 bg-muted/15 shadow-none">
                     <CardHeader>
                       <CardTitle className="text-lg">Select line of treatment</CardTitle>
                       <CardDescription>
@@ -943,71 +1037,6 @@ const InitiationOfTreatment = ({
                     <Card className="border-dashed border-border/80 bg-muted/15 shadow-none">
                       <CardContent className="space-y-8 p-4 sm:p-6">
                         <section className="space-y-4">
-                          <div className="flex flex-wrap items-start justify-between gap-3">
-                            <div className="space-y-1">
-                              <div className="flex items-center gap-2">
-                                <h2 className="font-display text-2xl font-semibold text-foreground">
-                                  Factors to consider
-                                </h2>
-                                {canEditContent &&
-                                  (isEditingFactors ? (
-                                    <div className="flex flex-wrap items-center gap-2">
-                                      <Button
-                                        type="button"
-                                        variant="secondary"
-                                        size="sm"
-                                        onClick={onCancelEditingFactors}
-                                        disabled={isSavingFactors}
-                                      >
-                                        Cancel
-                                      </Button>
-                                      <Button
-                                        type="button"
-                                        size="sm"
-                                        onClick={onSaveFactors}
-                                        disabled={isSavingFactors}
-                                      >
-                                        {isSavingFactors ? "Saving..." : "Save"}
-                                      </Button>
-                                    </div>
-                                  ) : (
-                                    <Button
-                                      type="button"
-                                      variant="ghost"
-                                      size="icon"
-                                      className="h-8 w-8"
-                                      aria-label="Edit factors to consider"
-                                      onClick={onStartEditingFactors}
-                                    >
-                                      <PencilLine className="h-4 w-4" />
-                                    </Button>
-                                  ))}
-                              </div>
-                              <p className="text-sm text-muted-foreground">
-                                Review the medications available in Line {selectedLine} before choosing a starting dose.
-                              </p>
-                            </div>
-                          </div>
-
-                          {isEditingFactors ? (
-                            <RichTextEditor
-                              value={factorsContent}
-                              onChange={(value) => onFactorsContentChange?.(value)}
-                              placeholder="Add factors to consider notes..."
-                            />
-                          ) : factorsContentHasValue ? (
-                            <div className="rounded-2xl border border-border/70 bg-background/80 p-4">
-                              <div
-                                className="rich-text-content text-[15px] leading-relaxed text-muted-foreground sm:text-base"
-                                dangerouslySetInnerHTML={{ __html: factorsContent }}
-                              />
-                            </div>
-                          ) : (
-                            <div className="rounded-xl border border-dashed border-border/80 p-6 text-sm text-muted-foreground">
-                              No factors to consider notes yet.
-                            </div>
-                          )}
-
                           <div className="rounded-2xl border border-border/70 bg-background/80 p-4">
                             <div className="flex flex-wrap items-center justify-between gap-3">
                               <div className="flex items-center gap-3">
@@ -1047,7 +1076,7 @@ const InitiationOfTreatment = ({
 
                         <div className="border-t border-border/70" />
 
-                        <section className="space-y-4">
+                        <section ref={medicationSelectionSectionRef} className="space-y-4">
                           <div className="space-y-1">
                             <h2 className="font-display text-2xl font-semibold text-foreground">
                               Pick a starting dose and titration schedule
@@ -1060,7 +1089,7 @@ const InitiationOfTreatment = ({
 
                           <div className="space-y-2 md:max-w-md">
                             <Label>Medication</Label>
-                            <Select value={selectedMedicationId} onValueChange={setSelectedMedicationId}>
+                            <Select value={selectedMedicationId} onValueChange={(value) => handleMedicationSelection(value)}>
                               <SelectTrigger>
                                 <SelectValue
                                   placeholder={
@@ -1161,14 +1190,6 @@ const InitiationOfTreatment = ({
                                     {formatDoseCellValue(selectedMedication.max_dose_mg)}
                                   </p>
                                 </div>
-                                {canViewUpdatedAt && (
-                                  <div className="rounded-xl border border-border/70 bg-background/70 p-4">
-                                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Updated</p>
-                                    <p className="mt-2 text-sm text-foreground">
-                                      {formatTimestamp(selectedMedication.updated_at)}
-                                    </p>
-                                  </div>
-                                )}
                               </div>
                             </div>
                           ) : (

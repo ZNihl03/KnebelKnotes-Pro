@@ -6,6 +6,7 @@ import knebelLogo from "@/assets/knebel-logo.png";
 import AuthBar from "@/components/AuthBar";
 import ThemeToggle from "@/components/ThemeToggle";
 import { useAuth } from "@/contexts/AuthContext";
+import { useUiPreferences } from "@/contexts/UiPreferencesContext";
 import { cn } from "@/lib/utils";
 import { KNEBEL_MAIN_WEBSITE_LABEL, KNEBEL_MAIN_WEBSITE_URL } from "@/lib/siteLinks";
 import { supabase } from "@/lib/supabaseClient";
@@ -32,6 +33,7 @@ const Header = () => {
   const [categories, setCategories] = useState<HeaderCategory[]>([]);
   const navigate = useNavigate();
   const { profile } = useAuth();
+  const { showCategoryIds } = useUiPreferences();
   const showSubAdminTab = profile?.role === "sub_admin";
 
   useEffect(() => {
@@ -98,10 +100,10 @@ const Header = () => {
     <header className={headerClass}>
       <div className="container flex h-14 items-center justify-between gap-3 sm:h-16">
         <Link to="/" className="flex items-center gap-2.5">
-          <img src={knebelLogo} alt="Knebel Knebel Knotes logo" className="h-8 w-8 sm:h-9 sm:w-9" />
+          <img src={knebelLogo} alt="Knebel Knotes logo" className="h-8 w-8 sm:h-9 sm:w-9" />
           <div className="flex flex-col">
             <span className={logoTitleClass}>
-              Knebel Knebel Knotes
+              Knebel Knotes
             </span>
             <span className={logoSubtitleClass}>
               Psychiatry Reference
@@ -133,9 +135,11 @@ const Header = () => {
                 categories.map((category) => (
                   <DropdownMenuItem key={category.id} onSelect={() => handleCategorySelect(category.id)}>
                     <span className="min-w-0 flex-1 truncate">{category.name}</span>
-                    <span className="ml-3 rounded-full border border-border/70 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                      {category.short_code}
-                    </span>
+                    {showCategoryIds && (
+                      <span className="ml-3 rounded-full border border-border/70 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                        {category.short_code}
+                      </span>
+                    )}
                   </DropdownMenuItem>
                 ))
               ) : (
@@ -254,9 +258,11 @@ const Header = () => {
                           className="flex items-center justify-between rounded-lg px-3 py-2 text-left text-sm font-medium text-black transition-colors hover:bg-muted dark:text-white"
                         >
                           <span className="truncate">{category.name}</span>
-                          <span className="ml-3 rounded-full border border-border/70 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                            {category.short_code}
-                          </span>
+                          {showCategoryIds && (
+                            <span className="ml-3 rounded-full border border-border/70 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                              {category.short_code}
+                            </span>
+                          )}
                         </button>
                       ))
                     ) : (
