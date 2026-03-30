@@ -9,13 +9,15 @@ import {
   FileClock,
   Loader2,
   PencilLine,
+  Plus,
   ShieldCheck,
   ShieldQuestion,
+  Trash2,
 } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/contexts/AuthContext";
 import RichTextEditor from "@/components/RichTextEditor";
-import { formatDoseMg } from "@/lib/treatmentProgression";
+import { formatDoseMg, formatDoseRangeMg } from "@/lib/treatmentProgression";
 import { richTextHasContent } from "@/lib/richText";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -55,6 +57,10 @@ type AntidepressantMasterRow = {
   drug_name: string;
   medication_type: string;
   frequency: string | null;
+  tolerability_less: string | null;
+  tolerability_more: string | null;
+  safety: string | null;
+  cost: string | null;
   line_of_treatment: number;
   initiation_dose_mg: number | null;
   therapeutic_min_dose_mg: number | null;
@@ -69,11 +75,16 @@ type AntidepressantSnapshot = Pick<
   | "drug_name"
   | "medication_type"
   | "frequency"
+  | "tolerability_less"
+  | "tolerability_more"
+  | "safety"
+  | "cost"
   | "line_of_treatment"
   | "initiation_dose_mg"
   | "therapeutic_min_dose_mg"
   | "therapeutic_max_dose_mg"
   | "max_dose_mg"
+  | "is_active"
 >;
 
 type AuditLogRow = {
@@ -110,6 +121,10 @@ type EditFormState = {
   drug_name: string;
   medication_type: string;
   frequency: string;
+  tolerability_less: string;
+  tolerability_more: string;
+  safety: string;
+  cost: string;
   line_of_treatment: string;
   initiation_dose_mg: string;
   therapeutic_min_dose_mg: string;
@@ -133,11 +148,41 @@ const optionalDoseField = z.preprocess((value) => {
   return Number.isNaN(numericValue) ? value : numericValue;
 }, z.number().int("Use a whole-number dose.").min(0, "Use a non-negative integer dose.").nullable());
 
+const optionalTextField = z.preprocess((value) => {
+  if (value === "" || value === null || value === undefined) {
+    return null;
+  }
+
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    return trimmed === "" ? null : trimmed;
+  }
+
+  return value;
+}, z.string().max(100, "Keep this value under 100 characters.").nullable());
+
+const optionalNotesField = z.preprocess((value) => {
+  if (value === "" || value === null || value === undefined) {
+    return null;
+  }
+
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    return trimmed === "" ? null : trimmed;
+  }
+
+  return value;
+}, z.string().max(500, "Keep this value under 500 characters.").nullable());
+
 const editSchema = z
   .object({
     drug_name: z.string().trim().min(1, "Drug name is required."),
     medication_type: z.string().trim().min(1, "Medication type is required."),
     frequency: z.string().trim().max(100, "Frequency is too long."),
+    tolerability_less: optionalNotesField,
+    tolerability_more: optionalNotesField,
+    safety: optionalNotesField,
+    cost: optionalTextField,
     line_of_treatment: z.coerce.number().int().min(1, "Line must be 1, 2, or 3.").max(3, "Line must be 1, 2, or 3."),
     initiation_dose_mg: optionalDoseField,
     therapeutic_min_dose_mg: optionalDoseField,
@@ -167,35 +212,32 @@ const editSchema = z
           message: "Provide all four dose values or leave all of them blank.",
         });
       });
-      return;
     }
 
-    if (populatedDoseCount === 0) {
-      return;
-    }
+    if (populatedDoseCount === doseValues.length) {
+      if (data.therapeutic_min_dose_mg! < data.initiation_dose_mg!) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["therapeutic_min_dose_mg"],
+          message: "Therapeutic minimum should be at or above the initiation dose.",
+        });
+      }
 
-    if (data.therapeutic_min_dose_mg! < data.initiation_dose_mg!) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["therapeutic_min_dose_mg"],
-        message: "Therapeutic minimum should be at or above the initiation dose.",
-      });
-    }
+      if (data.therapeutic_max_dose_mg! < data.therapeutic_min_dose_mg!) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["therapeutic_max_dose_mg"],
+          message: "Therapeutic maximum must be greater than or equal to the therapeutic minimum.",
+        });
+      }
 
-    if (data.therapeutic_max_dose_mg! < data.therapeutic_min_dose_mg!) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["therapeutic_max_dose_mg"],
-        message: "Therapeutic maximum must be greater than or equal to the therapeutic minimum.",
-      });
-    }
-
-    if (data.max_dose_mg! < data.therapeutic_max_dose_mg!) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["max_dose_mg"],
-        message: "Maximum dose must be greater than or equal to the therapeutic maximum.",
-      });
+      if (data.max_dose_mg! < data.therapeutic_max_dose_mg!) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["max_dose_mg"],
+          message: "Maximum dose must be greater than or equal to the therapeutic maximum.",
+        });
+      }
     }
   });
 
@@ -203,11 +245,16 @@ const AUDITED_FIELDS: Array<{ key: keyof AntidepressantSnapshot; label: string }
   { key: "drug_name", label: "Drug name" },
   { key: "medication_type", label: "Medication type" },
   { key: "frequency", label: "Frequency" },
+  { key: "tolerability_less", label: "Tolerability: Less / Least" },
+  { key: "tolerability_more", label: "Tolerability: More / Most" },
+  { key: "safety", label: "Safety" },
+  { key: "cost", label: "Cost" },
   { key: "line_of_treatment", label: "Line of treatment" },
   { key: "initiation_dose_mg", label: "Initiation dose" },
   { key: "therapeutic_min_dose_mg", label: "Therapeutic minimum dose" },
   { key: "therapeutic_max_dose_mg", label: "Therapeutic maximum dose" },
   { key: "max_dose_mg", label: "Maximum dose" },
+  { key: "is_active", label: "Status" },
 ];
 
 const TREATMENT_LINES = [1, 2, 3] as const;
@@ -216,6 +263,10 @@ const emptyForm: EditFormState = {
   drug_name: "",
   medication_type: "monotherapy",
   frequency: "",
+  tolerability_less: "",
+  tolerability_more: "",
+  safety: "",
+  cost: "",
   line_of_treatment: "1",
   initiation_dose_mg: "",
   therapeutic_min_dose_mg: "",
@@ -228,6 +279,10 @@ const toEditForm = (row: AntidepressantMasterRow): EditFormState => ({
   drug_name: row.drug_name,
   medication_type: row.medication_type,
   frequency: row.frequency ?? "",
+  tolerability_less: row.tolerability_less ?? "",
+  tolerability_more: row.tolerability_more ?? "",
+  safety: row.safety ?? "",
+  cost: row.cost ?? "",
   line_of_treatment: String(row.line_of_treatment),
   initiation_dose_mg: row.initiation_dose_mg === null ? "" : String(row.initiation_dose_mg),
   therapeutic_min_dose_mg: row.therapeutic_min_dose_mg === null ? "" : String(row.therapeutic_min_dose_mg),
@@ -240,11 +295,16 @@ const toSnapshot = (row: AntidepressantMasterRow): AntidepressantSnapshot => ({
   drug_name: row.drug_name,
   medication_type: row.medication_type,
   frequency: row.frequency,
+  tolerability_less: row.tolerability_less,
+  tolerability_more: row.tolerability_more,
+  safety: row.safety,
+  cost: row.cost,
   line_of_treatment: row.line_of_treatment,
   initiation_dose_mg: row.initiation_dose_mg,
   therapeutic_min_dose_mg: row.therapeutic_min_dose_mg,
   therapeutic_max_dose_mg: row.therapeutic_max_dose_mg,
   max_dose_mg: row.max_dose_mg,
+  is_active: row.is_active,
 });
 
 const formatTimestamp = (value: string) => format(new Date(value), "MMM d, yyyy h:mm a");
@@ -263,6 +323,10 @@ const normalizeTreatmentModuleError = (message: string) => {
     [
       "antidepressant_master.medication_type",
       "antidepressant_master.frequency",
+      "antidepressant_master.tolerability_less",
+      "antidepressant_master.tolerability_more",
+      "antidepressant_master.safety",
+      "antidepressant_master.cost",
       "pending_antidepressant_edits.category_id",
     ].some((name) => message.includes(name));
   const hasSchemaCacheMiss =
@@ -277,6 +341,8 @@ const normalizeTreatmentModuleError = (message: string) => {
       "public.submit_antidepressant_pending_edit",
       "public.approve_antidepressant_pending_edit",
       "public.reject_antidepressant_pending_edit",
+      "public.delete_antidepressant_with_audit",
+      "public.submit_antidepressant_pending_delete",
     ].some((name) => message.includes(name));
 
   if (!hasSchemaCacheMiss && !hasMissingCategoryScopeColumn && !hasMissingMetadataColumn) {
@@ -294,6 +360,18 @@ const getStatusVariant = (status: PendingStatus) => {
 
 const snapshotsMatch = (left: AntidepressantSnapshot | null | undefined, right: AntidepressantSnapshot | null | undefined) =>
   AUDITED_FIELDS.every(({ key }) => left?.[key] === right?.[key]);
+
+const isDeleteProposal = (
+  item:
+    | Pick<PendingEditRow, "previous_data" | "proposed_data">
+    | Pick<AuditLogRow, "previous_data" | "new_data">,
+) => {
+  if ("proposed_data" in item) {
+    return item.previous_data?.is_active !== false && item.proposed_data?.is_active === false;
+  }
+
+  return item.previous_data?.is_active !== false && item.new_data?.is_active === false;
+};
 
 const formatSnapshotValue = (
   snapshot: Partial<AntidepressantSnapshot> | AntidepressantSnapshot,
@@ -317,6 +395,14 @@ const formatSnapshotValue = (
     return value;
   }
 
+  if (key === "tolerability_less" || key === "tolerability_more" || key === "safety" || key === "cost") {
+    return value;
+  }
+
+  if (key === "is_active") {
+    return value ? "Active" : "Deleted";
+  }
+
   if (key === "line_of_treatment") {
     return `Line ${value}`;
   }
@@ -327,6 +413,83 @@ const formatSnapshotValue = (
 const formatMedicationType = (value: string) => value.replace(/_/g, " ");
 
 const formatDoseCellValue = (value: number | null) => (value === null ? "Not set" : formatDoseMg(value));
+
+const formatDoseRangeValue = (min: number | null, max: number | null) =>
+  min === null || max === null ? "Not set" : formatDoseRangeMg(min, max);
+
+const formatTextCellValue = (value: string | null) => (value === null || value.trim() === "" ? "Not set" : value);
+
+const renderClinicalArrow = (value: string) => (
+  <span aria-hidden="true" className="inline-block text-[1rem] font-semibold leading-none align-[-0.08em]">
+    {value}
+  </span>
+);
+
+const splitClinicalNotes = (value: string | null) =>
+  value
+    ? value
+        .split(/\s*;\s*|\n+/)
+        .map((item) => item.trim())
+        .filter(Boolean)
+    : [];
+
+const renderClinicalItem = (item: string, tone: "less" | "more" | "safety") => {
+  const toneClasses =
+    tone === "less"
+      ? "border-emerald-200/80 bg-emerald-50 text-emerald-900"
+      : tone === "more"
+        ? "border-amber-200/80 bg-amber-50 text-amber-950"
+        : "border-slate-200/80 bg-slate-50 text-slate-900";
+  const match = item.match(/^([↓↡↑↟])\s*(.*)$/u);
+
+  return (
+    <span
+      key={`${tone}-${item}`}
+      className={`inline-flex w-fit max-w-full items-start gap-1.5 rounded-full border px-2 py-0.5 text-xs font-medium leading-tight ${toneClasses}`}
+    >
+      {match ? (
+        <>
+          {renderClinicalArrow(match[1])}
+          <span className="text-left whitespace-normal">{match[2] || item}</span>
+        </>
+      ) : (
+        <span className="text-left whitespace-normal">{item}</span>
+      )}
+    </span>
+  );
+};
+
+const renderClinicalList = (value: string | null, tone: "less" | "more" | "safety") => {
+  const items = splitClinicalNotes(value);
+
+  if (items.length === 0) {
+    return <span className="text-sm text-muted-foreground">Not set</span>;
+  }
+
+  return <div className="flex flex-col items-start gap-1.5">{items.map((item) => renderClinicalItem(item, tone))}</div>;
+};
+
+const renderCostValue = (value: string | null) => {
+  if (value === null || value.trim() === "") {
+    return <span className="text-sm text-muted-foreground">Not set</span>;
+  }
+
+  const normalized = value.trim().toLowerCase();
+  const toneClasses =
+    normalized === "low"
+      ? "border-emerald-200/80 bg-emerald-50 text-emerald-900"
+      : normalized === "moderate"
+        ? "border-yellow-200/80 bg-yellow-50 text-yellow-900"
+        : normalized.includes("moderate") && normalized.includes("high")
+          ? "border-orange-200/80 bg-orange-50 text-orange-950"
+          : normalized === "high"
+            ? "border-rose-200/80 bg-rose-50 text-rose-900"
+            : normalized === "n/a"
+              ? "border-slate-200/80 bg-slate-50 text-slate-700"
+              : "border-border/80 bg-muted/40 text-foreground";
+
+  return <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${toneClasses}`}>{value}</span>;
+};
 
 type InitiationOfTreatmentProps = {
   categoryId: string;
@@ -389,6 +552,11 @@ const InitiationOfTreatment = ({
   const [reviewAction, setReviewAction] = useState<ReviewAction>("approve");
   const [reviewNote, setReviewNote] = useState("");
   const [reviewSaving, setReviewSaving] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<AntidepressantMasterRow | null>(null);
+  const [deleteReason, setDeleteReason] = useState("");
+  const [deleteReasonError, setDeleteReasonError] = useState<string | null>(null);
+  const [deleteSaving, setDeleteSaving] = useState(false);
   const [selectedLine, setSelectedLine] = useState("");
   const [selectedMedicationId, setSelectedMedicationId] = useState("");
   const [isLineTableCollapsed, setIsLineTableCollapsed] = useState(false);
@@ -400,6 +568,7 @@ const InitiationOfTreatment = ({
   const canViewHistory = Boolean(user);
   const canTrackPending = canApprove || canPropose;
   const showActionColumn = canViewHistory || canEditRows;
+  const reviewIsDelete = reviewTarget ? isDeleteProposal(reviewTarget) : false;
 
   const loadRows = useCallback(async () => {
     if (!categoryId) {
@@ -582,13 +751,16 @@ const InitiationOfTreatment = ({
     setEditOpen(true);
   };
 
-  const openCreateDialog = () => {
+  const openCreateDialog = (line?: number) => {
     if (!canApprove) {
       return;
     }
 
     setSelectedRow(null);
-    setForm(emptyForm);
+    setForm({
+      ...emptyForm,
+      line_of_treatment: line ? String(line) : emptyForm.line_of_treatment,
+    });
     setFormErrors({});
     setEditOpen(true);
   };
@@ -602,6 +774,17 @@ const InitiationOfTreatment = ({
     setReviewAction(action);
     setReviewNote("");
     setReviewOpen(true);
+  };
+
+  const openDeleteDialog = (row: AntidepressantMasterRow) => {
+    if (!canEditRows) {
+      return;
+    }
+
+    setDeleteTarget(row);
+    setDeleteReason("");
+    setDeleteReasonError(null);
+    setDeleteOpen(true);
   };
 
   const loadHistory = async (row: AntidepressantMasterRow) => {
@@ -701,6 +884,10 @@ const InitiationOfTreatment = ({
           p_drug_name: parsed.data.drug_name,
           p_medication_type: parsed.data.medication_type,
           p_frequency: parsed.data.frequency.trim() || null,
+          p_tolerability_less: parsed.data.tolerability_less,
+          p_tolerability_more: parsed.data.tolerability_more,
+          p_safety: parsed.data.safety,
+          p_cost: parsed.data.cost,
           p_line_of_treatment: parsed.data.line_of_treatment,
           p_initiation_dose_mg: parsed.data.initiation_dose_mg,
           p_therapeutic_min_dose_mg: parsed.data.therapeutic_min_dose_mg,
@@ -713,6 +900,10 @@ const InitiationOfTreatment = ({
           p_drug_name: parsed.data.drug_name,
           p_medication_type: parsed.data.medication_type,
           p_frequency: parsed.data.frequency.trim() || null,
+          p_tolerability_less: parsed.data.tolerability_less,
+          p_tolerability_more: parsed.data.tolerability_more,
+          p_safety: parsed.data.safety,
+          p_cost: parsed.data.cost,
           p_line_of_treatment: parsed.data.line_of_treatment,
           p_initiation_dose_mg: parsed.data.initiation_dose_mg,
           p_therapeutic_min_dose_mg: parsed.data.therapeutic_min_dose_mg,
@@ -777,6 +968,50 @@ const InitiationOfTreatment = ({
     }
   };
 
+  const handleDelete = async () => {
+    if (!canEditRows || !deleteTarget) {
+      return;
+    }
+
+    const trimmedReason = deleteReason.trim();
+    if (trimmedReason.length < 10) {
+      setDeleteReasonError("Explain why this medication is being deleted.");
+      return;
+    }
+
+    setDeleteReasonError(null);
+    setDeleteSaving(true);
+    const rpcName = canApprove ? "delete_antidepressant_with_audit" : "submit_antidepressant_pending_delete";
+    const { error } = await supabase.rpc(rpcName, {
+      p_drug_id: deleteTarget.id,
+      p_change_reason: trimmedReason,
+    });
+    setDeleteSaving(false);
+
+    if (error) {
+      toast.error(normalizeTreatmentModuleError(error.message));
+      return;
+    }
+
+    const target = deleteTarget;
+    toast.success(canApprove ? "Medication deleted." : "Delete request submitted for approval.");
+    setDeleteOpen(false);
+    setDeleteTarget(null);
+    setDeleteReason("");
+    setDeleteReasonError(null);
+
+    if (canApprove && selectedMedicationId === target.id) {
+      setSelectedMedicationId("");
+    }
+
+    await loadRows();
+    await loadPendingRows();
+
+    if (canApprove && historyTarget?.id === target.id) {
+      await loadHistory(target);
+    }
+  };
+
   const renderTreatmentTable = (lineRows: AntidepressantMasterRow[]) => {
     if (lineRows.length === 0) {
       return (
@@ -788,24 +1023,29 @@ const InitiationOfTreatment = ({
 
     return (
       <div className="overflow-x-auto">
-        <Table>
+        <Table className="[&_th]:h-10 [&_th]:px-3 [&_td]:px-3 [&_td]:py-3 [&_td]:align-top">
           <TableHeader>
             <TableRow>
-              <TableHead>Drug</TableHead>
-              <TableHead>Type</TableHead>
-              <TableHead>Frequency</TableHead>
-              <TableHead>Initiation Dose</TableHead>
-              <TableHead>Max Dose</TableHead>
-              {showActionColumn && <TableHead className="text-right">Actions</TableHead>}
+              <TableHead className="w-[12rem]">Drug</TableHead>
+              <TableHead className="w-[10rem]">Type</TableHead>
+              <TableHead className="min-w-[16rem] whitespace-normal">
+                Tolerability: Less ({renderClinicalArrow("↓")}), Least ({renderClinicalArrow("↡")})
+              </TableHead>
+              <TableHead className="min-w-[16rem] whitespace-normal">
+                Tolerability: More ({renderClinicalArrow("↑")}), Most ({renderClinicalArrow("↟")})
+              </TableHead>
+              <TableHead className="min-w-[12rem] w-[12rem]">Safety</TableHead>
+              <TableHead className="min-w-[8rem]">Cost</TableHead>
+              {showActionColumn && <TableHead className="w-[8rem] text-right">Actions</TableHead>}
             </TableRow>
           </TableHeader>
           <TableBody>
             {lineRows.map((row) => (
               <TableRow key={row.id}>
-                <TableCell>
+                <TableCell className="font-medium">
                   <button
                     type="button"
-                    className={`text-left font-medium transition-all duration-200 focus-visible:outline-none ${
+                    className={`text-left leading-snug transition-all duration-200 focus-visible:outline-none ${
                       selectedMedicationId === row.id
                         ? "text-primary [text-shadow:0_0_14px_hsl(var(--primary)/0.35)]"
                         : "text-foreground hover:text-primary hover:[text-shadow:0_0_14px_hsl(var(--primary)/0.35)] focus-visible:text-primary focus-visible:[text-shadow:0_0_14px_hsl(var(--primary)/0.35)]"
@@ -816,23 +1056,50 @@ const InitiationOfTreatment = ({
                     {row.drug_name}
                   </button>
                 </TableCell>
-                <TableCell>{formatMedicationType(row.medication_type)}</TableCell>
-                <TableCell>{row.frequency || "Not set"}</TableCell>
-                <TableCell>{formatDoseCellValue(row.initiation_dose_mg)}</TableCell>
-                <TableCell>{formatDoseCellValue(row.max_dose_mg)}</TableCell>
+                <TableCell className="text-sm text-foreground">{formatMedicationType(row.medication_type)}</TableCell>
+                <TableCell className="align-top">{renderClinicalList(row.tolerability_less, "less")}</TableCell>
+                <TableCell className="align-top">{renderClinicalList(row.tolerability_more, "more")}</TableCell>
+                <TableCell className="align-top">{renderClinicalList(row.safety, "safety")}</TableCell>
+                <TableCell className="align-top">{renderCostValue(row.cost)}</TableCell>
                 {showActionColumn && (
-                  <TableCell>
-                    <div className="flex justify-end gap-2">
+                  <TableCell className="text-right">
+                    <div className="flex justify-end gap-1">
                       {canViewHistory && (
-                        <Button type="button" variant="outline" size="sm" onClick={() => void loadHistory(row)}>
-                          <FileClock className="mr-1.5 h-3.5 w-3.5" />
-                          History
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          className="h-9 w-9"
+                          aria-label={`View history for ${row.drug_name}`}
+                          title={`View history for ${row.drug_name}`}
+                          onClick={() => void loadHistory(row)}
+                        >
+                          <FileClock className="h-4 w-4" />
                         </Button>
                       )}
                       {canEditRows && (
-                        <Button type="button" size="sm" onClick={() => openEditDialog(row)}>
-                          <PencilLine className="mr-1.5 h-3.5 w-3.5" />
-                          {canApprove ? "Edit" : "Propose change"}
+                        <Button
+                          type="button"
+                          size="icon"
+                          className="h-9 w-9"
+                          aria-label={canApprove ? `Edit ${row.drug_name}` : `Propose change for ${row.drug_name}`}
+                          title={canApprove ? `Edit ${row.drug_name}` : `Propose change for ${row.drug_name}`}
+                          onClick={() => openEditDialog(row)}
+                        >
+                          <PencilLine className="h-4 w-4" />
+                        </Button>
+                      )}
+                      {canEditRows && (
+                        <Button
+                          type="button"
+                          variant="destructive"
+                          size="icon"
+                          className="h-9 w-9"
+                          aria-label={canApprove ? `Delete ${row.drug_name}` : `Request delete for ${row.drug_name}`}
+                          title={canApprove ? `Delete ${row.drug_name}` : `Request delete for ${row.drug_name}`}
+                          onClick={() => openDeleteDialog(row)}
+                        >
+                          <Trash2 className="h-4 w-4" />
                         </Button>
                       )}
                     </div>
@@ -1033,6 +1300,18 @@ const InitiationOfTreatment = ({
                                 <h3 className="font-display text-lg font-semibold text-foreground">
                                   Line {selectedLine} Treatment
                                 </h3>
+                                {canApprove && (
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="icon"
+                                    className="h-8 w-8"
+                                    aria-label={`Add medication to Line ${selectedLine}`}
+                                    onClick={() => openCreateDialog(Number(selectedLine))}
+                                  >
+                                    <Plus className="h-4 w-4" />
+                                  </Button>
+                                )}
                                 <Button
                                   type="button"
                                   variant="ghost"
@@ -1122,22 +1401,59 @@ const InitiationOfTreatment = ({
                                 </div>
 
                                 {showActionColumn && (
-                                  <div className="flex flex-wrap gap-2">
+                                  <div className="flex flex-wrap gap-1">
                                     {canViewHistory && (
                                       <Button
                                         type="button"
                                         variant="outline"
-                                        size="sm"
+                                        size="icon"
+                                        className="h-9 w-9"
+                                        aria-label={`View history for ${selectedMedication.drug_name}`}
+                                        title={`View history for ${selectedMedication.drug_name}`}
                                         onClick={() => void loadHistory(selectedMedication)}
                                       >
-                                        <FileClock className="mr-1.5 h-3.5 w-3.5" />
-                                        History
+                                        <FileClock className="h-4 w-4" />
                                       </Button>
                                     )}
                                     {canEditRows && (
-                                      <Button type="button" size="sm" onClick={() => openEditDialog(selectedMedication)}>
-                                        <PencilLine className="mr-1.5 h-3.5 w-3.5" />
-                                        {canApprove ? "Edit" : "Propose change"}
+                                      <Button
+                                        type="button"
+                                        size="icon"
+                                        className="h-9 w-9"
+                                        aria-label={
+                                          canApprove
+                                            ? `Edit ${selectedMedication.drug_name}`
+                                            : `Propose change for ${selectedMedication.drug_name}`
+                                        }
+                                        title={
+                                          canApprove
+                                            ? `Edit ${selectedMedication.drug_name}`
+                                            : `Propose change for ${selectedMedication.drug_name}`
+                                        }
+                                        onClick={() => openEditDialog(selectedMedication)}
+                                      >
+                                        <PencilLine className="h-4 w-4" />
+                                      </Button>
+                                    )}
+                                    {canEditRows && (
+                                      <Button
+                                        type="button"
+                                        variant="destructive"
+                                        size="icon"
+                                        className="h-9 w-9"
+                                        aria-label={
+                                          canApprove
+                                            ? `Delete ${selectedMedication.drug_name}`
+                                            : `Request delete for ${selectedMedication.drug_name}`
+                                        }
+                                        title={
+                                          canApprove
+                                            ? `Delete ${selectedMedication.drug_name}`
+                                            : `Request delete for ${selectedMedication.drug_name}`
+                                        }
+                                        onClick={() => openDeleteDialog(selectedMedication)}
+                                      >
+                                        <Trash2 className="h-4 w-4" />
                                       </Button>
                                     )}
                                   </div>
@@ -1146,27 +1462,22 @@ const InitiationOfTreatment = ({
 
                               <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                                 <div className="rounded-xl border border-border/70 bg-background/70 p-4">
-                                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Drug name</p>
-                                  <p className="mt-2 text-sm text-foreground">{selectedMedication.drug_name}</p>
-                                </div>
-                                <div className="rounded-xl border border-border/70 bg-background/70 p-4">
-                                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Medication type</p>
-                                  <p className="mt-2 text-sm text-foreground">
-                                    {formatMedicationType(selectedMedication.medication_type)}
-                                  </p>
-                                </div>
-                                <div className="rounded-xl border border-border/70 bg-background/70 p-4">
-                                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Frequency</p>
-                                  <p className="mt-2 text-sm text-foreground">{selectedMedication.frequency || "Not set"}</p>
-                                </div>
-                                <div className="rounded-xl border border-border/70 bg-background/70 p-4">
-                                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Initiation dose</p>
+                                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Starting dose</p>
                                   <p className="mt-2 text-sm text-foreground">
                                     {formatDoseCellValue(selectedMedication.initiation_dose_mg)}
                                   </p>
                                 </div>
                                 <div className="rounded-xl border border-border/70 bg-background/70 p-4">
-                                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Maximum dose</p>
+                                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Therapeutic range</p>
+                                  <p className="mt-2 text-sm text-foreground">
+                                    {formatDoseRangeValue(
+                                      selectedMedication.therapeutic_min_dose_mg,
+                                      selectedMedication.therapeutic_max_dose_mg,
+                                    )}
+                                  </p>
+                                </div>
+                                <div className="rounded-xl border border-border/70 bg-background/70 p-4">
+                                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Max dose / 24hrs</p>
                                   <p className="mt-2 text-sm text-foreground">
                                     {formatDoseCellValue(selectedMedication.max_dose_mg)}
                                   </p>
@@ -1283,6 +1594,7 @@ const InitiationOfTreatment = ({
                     const currentRow = masterRowMap.get(item.drug_id);
                     const currentSnapshot = currentRow ? toSnapshot(currentRow) : null;
                     const changedFields = AUDITED_FIELDS.filter(({ key }) => item.previous_data?.[key] !== item.proposed_data?.[key]);
+                    const deleteProposal = isDeleteProposal(item);
                     const isStale =
                       item.status === "pending" && currentSnapshot ? !snapshotsMatch(item.previous_data, currentSnapshot) : false;
 
@@ -1293,6 +1605,7 @@ const InitiationOfTreatment = ({
                             <div className="flex flex-wrap items-center gap-2">
                               <p className="text-sm font-medium text-foreground">{item.proposed_data.drug_name}</p>
                               <Badge variant={getStatusVariant(item.status)}>{item.status}</Badge>
+                              {deleteProposal && <Badge variant="destructive">delete request</Badge>}
                               {isStale && <Badge variant="destructive">stale</Badge>}
                             </div>
                             <p className="mt-1 text-xs text-muted-foreground">
@@ -1314,10 +1627,10 @@ const InitiationOfTreatment = ({
                                 disabled={isStale}
                                 onClick={() => openReviewDialog(item, "approve")}
                               >
-                                Approve
+                                {deleteProposal ? "Approve delete" : "Approve"}
                               </Button>
                               <Button type="button" variant="destructive" size="sm" onClick={() => openReviewDialog(item, "reject")}>
-                                Reject
+                                {deleteProposal ? "Reject delete" : "Reject"}
                               </Button>
                             </div>
                           )}
@@ -1365,7 +1678,7 @@ const InitiationOfTreatment = ({
         </CardContent>
       </Card>
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="w-[min(96vw,72rem)] max-w-5xl max-h-[92vh]">
           <DialogHeader>
             <DialogTitle>
               {!selectedRow
@@ -1383,7 +1696,7 @@ const InitiationOfTreatment = ({
             </DialogDescription>
           </DialogHeader>
 
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2 sm:col-span-2">
               <Label htmlFor="drug_name">Drug name</Label>
               <Input
@@ -1414,6 +1727,58 @@ const InitiationOfTreatment = ({
                 placeholder="Example: daily, nightly, BID"
               />
               {formErrors.frequency && <p className="text-sm text-destructive">{formErrors.frequency}</p>}
+            </div>
+
+            <div className="space-y-2">
+              <Label>Tolerability: Less / Least</Label>
+              <Textarea
+                value={form.tolerability_less}
+                onChange={(event) => setForm((prev) => ({ ...prev, tolerability_less: event.target.value }))}
+                rows={3}
+                placeholder="Example: ↓ Sedation; ↓ Weight gain; ↡ D/C syndrome"
+              />
+              {formErrors.tolerability_less && <p className="text-sm text-destructive">{formErrors.tolerability_less}</p>}
+            </div>
+
+            <div className="space-y-2">
+              <Label>Tolerability: More / Most</Label>
+              <Textarea
+                value={form.tolerability_more}
+                onChange={(event) => setForm((prev) => ({ ...prev, tolerability_more: event.target.value }))}
+                rows={3}
+                placeholder="Example: ↑ Sexual dysfunction; ↟ nausea"
+              />
+              {formErrors.tolerability_more && <p className="text-sm text-destructive">{formErrors.tolerability_more}</p>}
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="safety">Safety</Label>
+              <Textarea
+                id="safety"
+                value={form.safety}
+                onChange={(event) => setForm((prev) => ({ ...prev, safety: event.target.value }))}
+                rows={3}
+                placeholder="Example: QT prolongation; ↓ drug interaction"
+              />
+              {formErrors.safety && <p className="text-sm text-destructive">{formErrors.safety}</p>}
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="cost">Cost</Label>
+              <Input
+                id="cost"
+                value={form.cost}
+                onChange={(event) => setForm((prev) => ({ ...prev, cost: event.target.value }))}
+                placeholder="Example: low, moderate, high"
+              />
+              {formErrors.cost && <p className="text-sm text-destructive">{formErrors.cost}</p>}
+            </div>
+
+            <div className="sm:col-span-2">
+              <p className="text-xs text-muted-foreground">
+                For tolerability and safety, separate multiple notes with semicolons or new lines. Example:{" "}
+                <span className="font-medium">↓ Sedation; ↓ Weight gain; ↡ D/C syndrome</span>
+              </p>
             </div>
 
             <div className="space-y-2">
@@ -1522,12 +1887,22 @@ const InitiationOfTreatment = ({
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <ShieldQuestion className="h-5 w-5" />
-              {reviewAction === "approve" ? "Approve pending change" : "Reject pending change"}
+              {reviewAction === "approve"
+                ? reviewIsDelete
+                  ? "Approve pending deletion"
+                  : "Approve pending change"
+                : reviewIsDelete
+                  ? "Reject pending deletion"
+                  : "Reject pending change"}
             </DialogTitle>
             <DialogDescription>
               {reviewAction === "approve"
-                ? "Approving pushes the proposed numeric dose data into the master table and writes the audit log."
-                : "Rejecting leaves the master table unchanged and records the review outcome."}
+                ? reviewIsDelete
+                  ? "Approving marks the medication as deleted, removes it from treatment tables, and writes the audit log."
+                  : "Approving pushes the proposed medication data into the master table and writes the audit log."
+                : reviewIsDelete
+                  ? "Rejecting keeps the medication active and records the review outcome."
+                  : "Rejecting leaves the master table unchanged and records the review outcome."}
             </DialogDescription>
           </DialogHeader>
 
@@ -1562,8 +1937,60 @@ const InitiationOfTreatment = ({
               {reviewSaving
                 ? "Saving..."
                 : reviewAction === "approve"
-                  ? "Approve and apply"
-                  : "Reject proposal"}
+                  ? reviewIsDelete
+                    ? "Approve deletion"
+                    : "Approve and apply"
+                  : reviewIsDelete
+                    ? "Reject delete request"
+                    : "Reject proposal"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <DialogContent className="max-w-xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Trash2 className="h-5 w-5" />
+              {canApprove ? "Delete medication" : "Request medication deletion"}
+            </DialogTitle>
+            <DialogDescription>
+              {canApprove
+                ? "Deleting removes this medication from the treatment tables immediately, but keeps its audit history."
+                : "This submits a delete request for super-admin approval. The medication stays visible until the request is approved."}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3">
+            <div className="rounded-xl border border-border/70 bg-muted/30 p-4 text-sm text-foreground">
+              <span className="font-medium">Medication:</span> {deleteTarget?.drug_name ?? "Unknown medication"}
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="delete_reason">Reason</Label>
+              <Textarea
+                id="delete_reason"
+                rows={4}
+                value={deleteReason}
+                onChange={(event) => setDeleteReason(event.target.value)}
+                placeholder="Explain why this medication row should be deleted."
+              />
+              {deleteReasonError && <p className="text-sm text-destructive">{deleteReasonError}</p>}
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button type="button" variant="secondary" onClick={() => setDeleteOpen(false)} disabled={deleteSaving}>
+              Cancel
+            </Button>
+            <Button type="button" variant="destructive" onClick={() => void handleDelete()} disabled={deleteSaving}>
+              {deleteSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              {deleteSaving
+                ? "Saving..."
+                : canApprove
+                  ? "Delete medication"
+                  : "Submit delete request"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1597,6 +2024,7 @@ const InitiationOfTreatment = ({
                 const changedFields = AUDITED_FIELDS.filter(
                   ({ key }) => item.previous_data?.[key] !== item.new_data?.[key],
                 );
+                const deleteEntry = isDeleteProposal(item);
 
                 return (
                   <div key={item.id} className="rounded-2xl border border-border/80 bg-muted/20 p-4">
@@ -1605,7 +2033,10 @@ const InitiationOfTreatment = ({
                         <p className="text-sm font-medium text-foreground">{item.changed_by_label}</p>
                         <p className="text-xs text-muted-foreground">{formatTimestamp(item.created_at)}</p>
                       </div>
-                      <Badge variant="outline">{changedFields.length} field(s) changed</Badge>
+                      <div className="flex flex-wrap items-center gap-2">
+                        {deleteEntry && <Badge variant="destructive">deleted</Badge>}
+                        <Badge variant="outline">{changedFields.length} field(s) changed</Badge>
+                      </div>
                     </div>
 
                     <div className="mt-3 rounded-xl bg-background/70 p-3 text-sm text-foreground">
