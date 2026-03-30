@@ -102,7 +102,7 @@ type PendingStatus = "pending" | "approved" | "rejected";
 
 type PendingEditRow = {
   id: string;
-  drug_id: string;
+  drug_id: string | null;
   category_id: string;
   proposed_by_user_id: string;
   previous_data: AntidepressantSnapshot;
@@ -323,6 +323,7 @@ const normalizeTreatmentModuleError = (message: string) => {
       "public.create_antidepressant_with_audit",
       "public.update_antidepressant_with_audit",
       "public.submit_antidepressant_pending_edit",
+      "public.submit_antidepressant_pending_add",
       "public.approve_antidepressant_pending_edit",
       "public.reject_antidepressant_pending_edit",
       "public.delete_antidepressant_with_audit",
@@ -353,6 +354,10 @@ const isDeleteProposal = (
   }
 
   return item.previous_data?.is_active !== false && item.new_data?.is_active === false;
+};
+
+const isCreateProposal = (item: Pick<PendingEditRow, "drug_id" | "previous_data">) => {
+  return item.drug_id === null || Object.keys(item.previous_data ?? {}).length === 0;
 };
 
 const formatSnapshotValue = (
@@ -554,6 +559,7 @@ const InitiationOfTreatment = ({
   const canTrackPending = canApprove || canPropose;
   const showActionColumn = canViewHistory || canEditRows;
   const reviewIsDelete = reviewTarget ? isDeleteProposal(reviewTarget) : false;
+  const reviewIsCreate = reviewTarget ? isCreateProposal(reviewTarget) : false;
 
   const loadRows = useCallback(async () => {
     if (!categoryId) {
@@ -737,7 +743,7 @@ const InitiationOfTreatment = ({
   };
 
   const openCreateDialog = (line?: number) => {
-    if (!canApprove) {
+    if (!canEditRows) {
       return;
     }
 
@@ -853,10 +859,6 @@ const InitiationOfTreatment = ({
       return;
     }
 
-    if (!selectedRow && !canApprove) {
-      return;
-    }
-
     const parsed = editSchema.safeParse(form);
     if (!parsed.success) {
       const nextErrors: Partial<Record<keyof EditFormState, string>> = {};
@@ -872,7 +874,9 @@ const InitiationOfTreatment = ({
 
     setSaving(true);
     const rpcName = !selectedRow
-      ? "create_antidepressant_with_audit"
+      ? canApprove
+        ? "create_antidepressant_with_audit"
+        : "submit_antidepressant_pending_add"
       : canApprove
         ? "update_antidepressant_with_audit"
         : "submit_antidepressant_pending_edit";
@@ -918,7 +922,15 @@ const InitiationOfTreatment = ({
       return;
     }
 
-    toast.success(!selectedRow ? "Medication added." : canApprove ? "Master entry updated." : "Change proposal submitted for approval.");
+    toast.success(
+      !selectedRow
+        ? canApprove
+          ? "Medication added."
+          : "Medication proposal submitted for approval."
+        : canApprove
+          ? "Master entry updated."
+          : "Change proposal submitted for approval.",
+    );
     setEditOpen(false);
     setSelectedRow(null);
     setForm(emptyForm);
@@ -952,7 +964,15 @@ const InitiationOfTreatment = ({
       return;
     }
 
-    toast.success(reviewAction === "approve" ? "Pending edit approved." : "Pending edit rejected.");
+    toast.success(
+      reviewAction === "approve"
+        ? reviewIsCreate
+          ? "Medication proposal approved."
+          : "Pending edit approved."
+        : reviewIsCreate
+          ? "Medication proposal rejected."
+          : "Pending edit rejected.",
+    );
     setReviewOpen(false);
     setReviewTarget(null);
     setReviewNote("");
@@ -1168,7 +1188,7 @@ const InitiationOfTreatment = ({
                 <Link to="/login">Log in to make changes</Link>
               </Button>
             )}
-            {canApprove && (
+            {canEditRows && (
               <Button type="button" className="w-full sm:w-auto" onClick={openCreateDialog}>
                 Add medication
               </Button>
@@ -1320,7 +1340,7 @@ const InitiationOfTreatment = ({
                                 <h3 className="font-display text-lg font-semibold text-foreground">
                                   Line {selectedLine} Treatment
                                 </h3>
-                                {canApprove && (
+                                {canEditRows && (
                                   <Button
                                     type="button"
                                     variant="outline"
@@ -1613,6 +1633,7 @@ const InitiationOfTreatment = ({
                   {pendingRows.map((item) => {
                     const changedFields = AUDITED_FIELDS.filter(({ key }) => item.previous_data?.[key] !== item.proposed_data?.[key]);
                     const deleteProposal = isDeleteProposal(item);
+                    const createProposal = isCreateProposal(item);
                     const canRemoveReviewedProposal =
                       item.status !== "pending" && Boolean(user) && (canApprove || item.proposed_by_user_id === user?.id);
 
@@ -1623,6 +1644,7 @@ const InitiationOfTreatment = ({
                             <div className="flex flex-wrap items-center gap-2">
                               <p className="text-sm font-medium text-foreground">{item.proposed_data.drug_name}</p>
                               <Badge variant={getStatusVariant(item.status)}>{item.status}</Badge>
+                              {createProposal && <Badge variant="secondary">new medication</Badge>}
                               {deleteProposal && <Badge variant="destructive">delete request</Badge>}
                             </div>
                             <p className="mt-1 text-xs text-muted-foreground">
@@ -1645,7 +1667,7 @@ const InitiationOfTreatment = ({
                                     size="sm"
                                     onClick={() => openReviewDialog(item, "approve")}
                                   >
-                                    {deleteProposal ? "Approve delete" : "Approve"}
+                                    {deleteProposal ? "Approve delete" : createProposal ? "Approve add" : "Approve"}
                                   </Button>
                                   <Button
                                     type="button"
@@ -1653,7 +1675,7 @@ const InitiationOfTreatment = ({
                                     size="sm"
                                     onClick={() => openReviewDialog(item, "reject")}
                                   >
-                                    {deleteProposal ? "Reject delete" : "Reject"}
+                                    {deleteProposal ? "Reject delete" : createProposal ? "Reject add" : "Reject"}
                                   </Button>
                                 </>
                               )}
@@ -1713,14 +1735,18 @@ const InitiationOfTreatment = ({
           <DialogHeader>
             <DialogTitle>
               {!selectedRow
-                ? "Add medication"
+                ? canApprove
+                  ? "Add medication"
+                  : "Propose new medication"
                 : canApprove
                   ? "Edit initiation of treatment entry"
                   : "Propose medication change"}
             </DialogTitle>
             <DialogDescription>
               {!selectedRow
-                ? "This creates a new medication row for the current category and writes an audit log entry."
+                ? canApprove
+                  ? "This creates a new medication row for the current category and writes an audit log entry."
+                  : "This submits a new medication for super-admin approval. The medication appears in the treatment list once approved."
                 : canApprove
                 ? "This updates the master record immediately and writes an audit log entry."
                 : "This submits a pending change for super-admin approval. The master record stays unchanged until approved."}
@@ -1921,18 +1947,26 @@ const InitiationOfTreatment = ({
               {reviewAction === "approve"
                 ? reviewIsDelete
                   ? "Approve pending deletion"
+                  : reviewIsCreate
+                    ? "Approve pending addition"
                   : "Approve pending change"
                 : reviewIsDelete
                   ? "Reject pending deletion"
+                  : reviewIsCreate
+                    ? "Reject pending addition"
                   : "Reject pending change"}
             </DialogTitle>
             <DialogDescription>
               {reviewAction === "approve"
                 ? reviewIsDelete
                   ? "Approving marks the medication as deleted, removes it from treatment tables, and writes the audit log."
+                  : reviewIsCreate
+                    ? "Approving creates the medication in the master table so it appears in the treatment list and writes the audit log."
                   : "Approving pushes the proposed medication data into the master table and writes the audit log."
                 : reviewIsDelete
                   ? "Rejecting keeps the medication active and records the review outcome."
+                  : reviewIsCreate
+                    ? "Rejecting keeps the new medication out of the treatment list and records the review outcome."
                   : "Rejecting leaves the master table unchanged and records the review outcome."}
             </DialogDescription>
           </DialogHeader>
@@ -1970,9 +2004,13 @@ const InitiationOfTreatment = ({
                 : reviewAction === "approve"
                   ? reviewIsDelete
                     ? "Approve deletion"
+                    : reviewIsCreate
+                      ? "Approve and add"
                     : "Approve and apply"
                   : reviewIsDelete
                     ? "Reject delete request"
+                    : reviewIsCreate
+                      ? "Reject new medication"
                     : "Reject proposal"}
             </Button>
           </DialogFooter>

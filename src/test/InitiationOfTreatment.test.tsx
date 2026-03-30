@@ -22,11 +22,17 @@ describe("InitiationOfTreatment", () => {
     pendingRows: Array<Record<string, unknown>> = [],
     profileRows: Array<Record<string, unknown>> = [],
   ) => {
+    const pendingResult = { data: pendingRows, error: null };
     const pendingQuery = {
       eq: vi.fn(),
-      order: vi.fn().mockResolvedValue({ data: pendingRows, error: null }),
+      order: vi.fn(),
+      then: vi.fn(),
     };
     pendingQuery.eq.mockImplementation(() => pendingQuery);
+    pendingQuery.order.mockImplementation(() => pendingQuery);
+    pendingQuery.then.mockImplementation((resolve: (value: typeof pendingResult) => unknown) =>
+      Promise.resolve(resolve(pendingResult)),
+    );
 
     const pendingSelect = vi.fn(() => pendingQuery);
     const profileIn = vi.fn().mockResolvedValue({ data: profileRows, error: null });
@@ -686,5 +692,217 @@ describe("InitiationOfTreatment", () => {
     expect(screen.queryByText("The master row changed after this proposal was submitted. This proposal should be reviewed and resubmitted against the latest data.")).not.toBeInTheDocument();
     expect(screen.queryByText("stale")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Approve" })).not.toBeDisabled();
+  });
+
+  it("lets sub admins submit new medication proposals for approval", async () => {
+    vi.mocked(useAuth).mockReturnValue({
+      user: {
+        id: "user-2",
+      },
+      profile: {
+        role: "sub_admin",
+      },
+      loading: false,
+      session: null,
+      signIn: vi.fn(),
+      signOut: vi.fn(),
+      refreshProfile: vi.fn(),
+    } as never);
+
+    mockPendingQueueQuery();
+    vi.mocked(supabase.rpc)
+      .mockResolvedValueOnce({
+        data: [],
+        error: null,
+      } as never)
+      .mockResolvedValueOnce({
+        data: null,
+        error: null,
+      } as never);
+
+    render(
+      <MemoryRouter>
+        <InitiationOfTreatment categoryId="category-1" categoryName="Depression" />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("Initiation of Treatment")).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Add medication" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("Propose new medication")).toBeInTheDocument();
+    });
+
+    fireEvent.change(screen.getByLabelText("Drug name"), {
+      target: { value: "Testoxetine" },
+    });
+    fireEvent.change(screen.getByLabelText("Change reason"), {
+      target: { value: "Add a reviewed option for line 1 treatment." },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Submit for approval" }));
+
+    await waitFor(() => {
+      expect(supabase.rpc).toHaveBeenNthCalledWith(2, "submit_antidepressant_pending_add", {
+        p_category_id: "category-1",
+        p_drug_name: "Testoxetine",
+        p_medication_type: "monotherapy",
+        p_frequency: null,
+        p_tolerability_less: null,
+        p_tolerability_more: null,
+        p_safety: null,
+        p_cost: null,
+        p_line_of_treatment: 1,
+        p_initiation_dose_mg: null,
+        p_therapeutic_min_dose_mg: null,
+        p_therapeutic_max_dose_mg: null,
+        p_max_dose_mg: null,
+        p_change_reason: "Add a reviewed option for line 1 treatment.",
+      });
+    });
+  });
+
+  it("shows newly approved medication proposals in the treatment list", async () => {
+    vi.mocked(useAuth).mockReturnValue({
+      user: {
+        id: "user-1",
+      },
+      profile: {
+        role: "super_admin",
+      },
+      loading: false,
+      session: null,
+      signIn: vi.fn(),
+      signOut: vi.fn(),
+      refreshProfile: vi.fn(),
+    } as never);
+
+    mockPendingQueueQuery([
+      {
+        id: "pending-add",
+        drug_id: null,
+        category_id: "category-1",
+        proposed_by_user_id: "user-2",
+        previous_data: {},
+        proposed_data: {
+          drug_name: "Testoxetine",
+          medication_type: "monotherapy",
+          frequency: "daily",
+          tolerability_less: null,
+          tolerability_more: "↑ nausea",
+          safety: "↓ drug interaction",
+          cost: "Low",
+          line_of_treatment: 1,
+          initiation_dose_mg: 10,
+          therapeutic_min_dose_mg: 20,
+          therapeutic_max_dose_mg: 40,
+          max_dose_mg: 60,
+          is_active: true,
+        },
+        change_reason: "Add the approved medication option.",
+        status: "pending",
+        review_note: null,
+        reviewed_by_user_id: null,
+        reviewed_at: null,
+        created_at: "2026-03-30T18:00:00.000Z",
+      },
+    ]);
+
+    vi.mocked(supabase.rpc)
+      .mockResolvedValueOnce({
+        data: [],
+        error: null,
+      } as never)
+      .mockResolvedValueOnce({
+        data: {
+          id: "drug-new",
+          category_id: "category-1",
+          drug_name: "Testoxetine",
+          medication_type: "monotherapy",
+          frequency: "daily",
+          tolerability_less: null,
+          tolerability_more: "↑ nausea",
+          safety: "↓ drug interaction",
+          cost: "Low",
+          line_of_treatment: 1,
+          initiation_dose_mg: 10,
+          therapeutic_min_dose_mg: 20,
+          therapeutic_max_dose_mg: 40,
+          max_dose_mg: 60,
+          updated_at: "2026-03-30T18:05:00.000Z",
+          is_active: true,
+        },
+        error: null,
+      } as never)
+      .mockResolvedValueOnce({
+        data: [
+          {
+            id: "drug-new",
+            category_id: "category-1",
+            drug_name: "Testoxetine",
+            medication_type: "monotherapy",
+            frequency: "daily",
+            tolerability_less: null,
+            tolerability_more: "↑ nausea",
+            safety: "↓ drug interaction",
+            cost: "Low",
+            line_of_treatment: 1,
+            initiation_dose_mg: 10,
+            therapeutic_min_dose_mg: 20,
+            therapeutic_max_dose_mg: 40,
+            max_dose_mg: 60,
+            updated_at: "2026-03-30T18:05:00.000Z",
+            is_active: true,
+          },
+        ],
+        error: null,
+      } as never);
+
+    render(
+      <MemoryRouter>
+        <InitiationOfTreatment categoryId="category-1" categoryName="Depression" />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("Initiation of Treatment")).toBeInTheDocument();
+    });
+
+    const workflowTab = screen.getByRole("tab", { name: "Pending Approvals" });
+    fireEvent.mouseDown(workflowTab);
+    fireEvent.click(workflowTab);
+
+    await waitFor(() => {
+      expect(workflowTab.getAttribute("aria-selected")).toBe("true");
+      expect(screen.getByRole("button", { name: "Approve add" })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Approve add" }));
+    fireEvent.click(screen.getByRole("button", { name: "Approve and add" }));
+
+    await waitFor(() => {
+      expect(supabase.rpc).toHaveBeenCalledWith("approve_antidepressant_pending_edit", {
+        p_pending_edit_id: "pending-add",
+        p_review_note: null,
+      });
+    });
+
+    const stepsTab = screen.getByRole("tab", { name: "Treatment Steps" });
+    fireEvent.mouseDown(stepsTab);
+    fireEvent.click(stepsTab);
+
+    await waitFor(() => {
+      expect(stepsTab.getAttribute("aria-selected")).toBe("true");
+      expect(screen.getByRole("button", { name: "Line 1" })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Line 1" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Select medication Testoxetine" })).toBeInTheDocument();
+    });
   });
 });
