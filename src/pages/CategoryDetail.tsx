@@ -68,7 +68,7 @@ const VISIBLE_SECTIONS = [
   { key: "diagnosis", label: "Diagnosis", icon: ClipboardList },
   { key: "treatment", label: "Initiation of Treatment", icon: Bandage },
   { key: "reassessment", label: "Assessment of Response", icon: RefreshCcw },
-  { key: "antidepressant-augment", label: "Antidepressant Augment", icon: Pill },
+  { key: "antidepressant-augment", label: "Response Optimization", icon: Pill },
 ] as const;
 
 type SectionFieldKey = (typeof ALL_SECTION_KEYS)[number];
