@@ -120,6 +120,8 @@ describe("InitiationOfTreatment", () => {
       expect(screen.getByText("Initiation of Treatment")).toBeInTheDocument();
     });
 
+    expect(screen.getByText("2.0")).toBeInTheDocument();
+
     const factorsHeading = screen.getByRole("heading", { name: "Factors to consider" });
     const lineSelectionHeading = screen.getByRole("heading", { name: "Select line of treatment" });
 
@@ -135,6 +137,9 @@ describe("InitiationOfTreatment", () => {
 
     expect(screen.queryByText("Approve + direct edit access")).not.toBeInTheDocument();
     expect(screen.getByText("Select line of treatment")).toBeInTheDocument();
+    expect(screen.getByText("2.2")).toBeInTheDocument();
+    expect(screen.getByText("2.3")).toBeInTheDocument();
+    expect(screen.getByText("2.4")).toBeInTheDocument();
     expect(screen.getByText("Factors to consider")).toBeInTheDocument();
     expect(screen.getByText("Pick a starting dose and titration schedule")).toBeInTheDocument();
     expect(screen.getByText("Patient education")).toBeInTheDocument();

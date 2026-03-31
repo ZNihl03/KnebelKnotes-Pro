@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import RichTextEditor from "@/components/RichTextEditor";
 import { richTextHasContent, sanitizeRichText } from "@/lib/richText";
-import { AssessmentEditableField, getAssessmentDisplayContent } from "@/lib/assessmentContent";
+import { getAssessmentDisplayContent } from "@/lib/assessmentContent";
 import tableThreePointTwoImage from "@/assets/table3.2.png";
 
 type EditableAssessmentSection = {
@@ -21,8 +21,12 @@ type EditableAssessmentSection = {
 type AssessmentOfResponseProps = {
   notesSection: EditableAssessmentSection;
   initialResponseSection: EditableAssessmentSection;
+  antidepressantSwitchSection: EditableAssessmentSection;
+  antidepressantAugmentSection: EditableAssessmentSection;
   changeTreatmentSection: EditableAssessmentSection;
   doseOptimizationSection: EditableAssessmentSection;
+  notesStepLabel?: string;
+  notesTitle?: string;
   notesOnly?: boolean;
 };
 
@@ -37,8 +41,12 @@ const cardBodyClassName = "text-[15px] leading-relaxed text-muted-foreground sm:
 const AssessmentOfResponse = ({
   notesSection,
   initialResponseSection,
+  antidepressantSwitchSection,
+  antidepressantAugmentSection,
   changeTreatmentSection,
   doseOptimizationSection,
+  notesStepLabel,
+  notesTitle = "Assessment of Response",
   notesOnly = false,
 }: AssessmentOfResponseProps) => {
   const [scenario, setScenario] = useState<ResponseScenario>("");
@@ -49,6 +57,14 @@ const AssessmentOfResponse = ({
   const displayInitialResponseContent = useMemo(
     () => getAssessmentDisplayContent("assessment_initial_response", initialResponseSection.content),
     [initialResponseSection.content],
+  );
+  const displayAntidepressantSwitchContent = useMemo(
+    () => sanitizeRichText(antidepressantSwitchSection.content),
+    [antidepressantSwitchSection.content],
+  );
+  const displayAntidepressantAugmentContent = useMemo(
+    () => sanitizeRichText(antidepressantAugmentSection.content),
+    [antidepressantAugmentSection.content],
   );
   const displayChangeTreatmentContent = useMemo(
     () => getAssessmentDisplayContent("assessment_change_treatment", changeTreatmentSection.content),
@@ -83,27 +99,27 @@ const AssessmentOfResponse = ({
     );
   };
 
-  const renderEditableCardContent = (
-    field: AssessmentEditableField,
-    section: EditableAssessmentSection,
-    displayContent: string,
-  ) => {
+  const renderEditableCardContent = (section: EditableAssessmentSection, displayContent: string, placeholder: string) => {
     if (section.isEditing) {
       return (
         <RichTextEditor
           value={section.content}
           onChange={section.onContentChange}
-          placeholder={`Add ${field.replaceAll("_", " ")} content...`}
+          placeholder={placeholder}
         />
       );
     }
 
-    return (
-      <div
-        className={`rich-text-content ${cardBodyClassName}`}
-        dangerouslySetInnerHTML={{ __html: displayContent }}
-      />
-    );
+    if (richTextHasContent(displayContent)) {
+      return (
+        <div
+          className={`rich-text-content ${cardBodyClassName}`}
+          dangerouslySetInnerHTML={{ __html: displayContent }}
+        />
+      );
+    }
+
+    return <p className={cardBodyClassName}>No information yet.</p>;
   };
 
   const renderResponsePatternSelector = () => (
@@ -132,11 +148,13 @@ const AssessmentOfResponse = ({
     <div className="rounded-2xl border border-border/70 bg-card/60 p-4 shadow-[var(--card-shadow)] sm:p-5">
       <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="space-y-1">
-          <div className="inline-flex rounded-full border border-border/70 bg-muted/50 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.24em] text-muted-foreground">
-            Notes
-          </div>
+          {notesStepLabel ? (
+            <div className="inline-flex rounded-full border border-border/70 bg-muted/50 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.24em] text-muted-foreground">
+              {notesStepLabel}
+            </div>
+          ) : null}
           <h3 className="font-display text-lg font-semibold text-foreground sm:text-xl">
-            Additional assessment notes
+            {notesTitle}
           </h3>
         </div>
         {renderCardActions(notesSection)}
@@ -146,7 +164,7 @@ const AssessmentOfResponse = ({
         <RichTextEditor
           value={notesSection.content}
           onChange={notesSection.onContentChange}
-          placeholder="Add assessment of response notes..."
+          placeholder={`Add ${notesTitle.toLowerCase()} notes...`}
         />
       ) : hasNotes ? (
         <div
@@ -181,13 +199,53 @@ const AssessmentOfResponse = ({
             {renderCardActions(initialResponseSection)}
           </div>
 
-          {renderEditableCardContent(
-            "assessment_initial_response",
-            initialResponseSection,
-            displayInitialResponseContent,
-          )}
+          {renderEditableCardContent(initialResponseSection, displayInitialResponseContent, "Add assessment of initial response content...")}
 
           {renderResponsePatternSelector()}
+        </div>
+      </div>
+
+      <div className="rounded-2xl border border-border/70 bg-card/60 p-4 shadow-[var(--card-shadow)] sm:p-5">
+        <div className="space-y-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="space-y-2">
+              <div className="inline-flex rounded-full border border-border/70 bg-muted/50 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.24em] text-muted-foreground">
+                4.0
+              </div>
+              <h3 className="font-display text-lg font-semibold text-foreground sm:text-xl">
+                Antidepressant Switch
+              </h3>
+            </div>
+            {renderCardActions(antidepressantSwitchSection)}
+          </div>
+
+          {renderEditableCardContent(
+            antidepressantSwitchSection,
+            displayAntidepressantSwitchContent,
+            "Add antidepressant switch content...",
+          )}
+        </div>
+      </div>
+
+      <div className="rounded-2xl border border-border/70 bg-card/60 p-4 shadow-[var(--card-shadow)] sm:p-5">
+        <div className="space-y-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="space-y-2">
+              <div className="inline-flex rounded-full border border-border/70 bg-muted/50 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.24em] text-muted-foreground">
+                5.0
+              </div>
+              <h3 className="font-display text-lg font-semibold text-foreground sm:text-xl">
+                Antidepressant Augment
+              </h3>
+            </div>
+            {renderCardActions(antidepressantAugmentSection)}
+          </div>
+
+          {renderEditableCardContent(
+            antidepressantAugmentSection,
+            displayAntidepressantAugmentContent,
+            "Add antidepressant augment content...",
+          )}
         </div>
       </div>
 
@@ -206,11 +264,7 @@ const AssessmentOfResponse = ({
               {renderCardActions(changeTreatmentSection)}
             </div>
 
-            {renderEditableCardContent(
-              "assessment_change_treatment",
-              changeTreatmentSection,
-              displayChangeTreatmentContent,
-            )}
+            {renderEditableCardContent(changeTreatmentSection, displayChangeTreatmentContent, "Add assessment change treatment content...")}
 
             <figure className="space-y-3">
               <Dialog>
@@ -260,11 +314,7 @@ const AssessmentOfResponse = ({
               {renderCardActions(doseOptimizationSection)}
             </div>
 
-            {renderEditableCardContent(
-              "assessment_dose_optimization",
-              doseOptimizationSection,
-              displayDoseOptimizationContent,
-            )}
+            {renderEditableCardContent(doseOptimizationSection, displayDoseOptimizationContent, "Add assessment dose optimization content...")}
           </div>
         </div>
       )}

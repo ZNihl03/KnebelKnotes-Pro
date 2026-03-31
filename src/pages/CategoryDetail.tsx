@@ -49,6 +49,8 @@ type CategoryDetailRecord = {
   antidepressant_augment: string | null;
   trial: string | null;
   assessment_initial_response: string | null;
+  assessment_antidepressant_switch: string | null;
+  assessment_antidepressant_augment: string | null;
   assessment_change_treatment: string | null;
   assessment_dose_optimization: string | null;
 };
@@ -62,6 +64,8 @@ const ALL_SECTION_KEYS = [
   "antidepressant_augment",
   "trial",
   "assessment_initial_response",
+  "assessment_antidepressant_switch",
+  "assessment_antidepressant_augment",
   "assessment_change_treatment",
   "assessment_dose_optimization",
 ] as const;
@@ -70,7 +74,7 @@ const VISIBLE_SECTIONS = [
   { key: "diagnosis", label: "Diagnosis", icon: ClipboardList },
   { key: "treatment", label: "Initiation of Treatment", icon: Bandage },
   { key: "reassessment", label: "Assessment of Response", icon: RefreshCcw },
-  { key: "antidepressant-augment", label: "Response Optimization", icon: Pill },
+  { key: "antidepressant-augment", label: "Completion Of Trial", icon: Pill },
 ] as const;
 
 type SectionFieldKey = (typeof ALL_SECTION_KEYS)[number];
@@ -80,12 +84,14 @@ type SectionDraft = Record<SectionFieldKey, string>;
 const BASE_CATEGORY_SELECT =
   "id, short_code, name, description, diagnosis, treatment, patient_education, improvement, reassessment, trial";
 const ASSESSMENT_RESPONSE_SELECT =
-  "assessment_initial_response, assessment_change_treatment, assessment_dose_optimization";
+  "assessment_initial_response, assessment_antidepressant_switch, assessment_antidepressant_augment, assessment_change_treatment, assessment_dose_optimization";
 const ANTIDEPRESSANT_AUGMENT_SELECT = "antidepressant_augment";
 
 const isMissingAssessmentColumnError = (message?: string) =>
   [
     "assessment_initial_response",
+    "assessment_antidepressant_switch",
+    "assessment_antidepressant_augment",
     "assessment_change_treatment",
     "assessment_dose_optimization",
   ].some((column) => message?.includes(column));
@@ -102,6 +108,8 @@ const createSectionDraft = (
   antidepressant_augment: sanitizeRichText(source?.antidepressant_augment),
   trial: sanitizeRichText(source?.trial),
   assessment_initial_response: sanitizeRichText(source?.assessment_initial_response),
+  assessment_antidepressant_switch: sanitizeRichText(source?.assessment_antidepressant_switch),
+  assessment_antidepressant_augment: sanitizeRichText(source?.assessment_antidepressant_augment),
   assessment_change_treatment: sanitizeRichText(source?.assessment_change_treatment),
   assessment_dose_optimization: sanitizeRichText(source?.assessment_dose_optimization),
 });
@@ -110,6 +118,8 @@ const ASSESSMENT_SECTION_FIELDS = [
   "reassessment",
   "antidepressant_augment",
   "assessment_initial_response",
+  "assessment_antidepressant_switch",
+  "assessment_antidepressant_augment",
   "assessment_change_treatment",
   "assessment_dose_optimization",
 ] as const;
@@ -122,18 +132,33 @@ const createAssessmentEditingState = (): Record<AssessmentSectionField, boolean>
   reassessment: false,
   antidepressant_augment: false,
   assessment_initial_response: false,
+  assessment_antidepressant_switch: false,
+  assessment_antidepressant_augment: false,
   assessment_change_treatment: false,
   assessment_dose_optimization: false,
 });
 
-const STRUCTURED_ASSESSMENT_FIELDS: AssessmentEditableField[] = [
+const DEFAULTED_ASSESSMENT_FIELDS: AssessmentEditableField[] = [
   "assessment_initial_response",
   "assessment_change_treatment",
   "assessment_dose_optimization",
 ];
 
-const isStructuredAssessmentField = (field: AssessmentSectionField): field is AssessmentEditableField =>
-  STRUCTURED_ASSESSMENT_FIELDS.includes(field as AssessmentEditableField);
+const ASSESSMENT_RESPONSE_SECTION_FIELDS = [
+  "assessment_initial_response",
+  "assessment_antidepressant_switch",
+  "assessment_antidepressant_augment",
+  "assessment_change_treatment",
+  "assessment_dose_optimization",
+] as const;
+
+type AssessmentResponseSectionField = (typeof ASSESSMENT_RESPONSE_SECTION_FIELDS)[number];
+
+const isAssessmentResponseSectionField = (field: AssessmentSectionField): field is AssessmentResponseSectionField =>
+  ASSESSMENT_RESPONSE_SECTION_FIELDS.includes(field as AssessmentResponseSectionField);
+
+const isDefaultedAssessmentField = (field: AssessmentSectionField): field is AssessmentEditableField =>
+  DEFAULTED_ASSESSMENT_FIELDS.includes(field as AssessmentEditableField);
 
 const getSectionFromHash = (hash: string): SectionKey | null => {
   const normalized = hash.replace("#", "");
@@ -209,6 +234,8 @@ const CategoryDetail = () => {
         ...baseResponse.data,
         antidepressant_augment: null,
         assessment_initial_response: null,
+        assessment_antidepressant_switch: null,
+        assessment_antidepressant_augment: null,
         assessment_change_treatment: null,
         assessment_dose_optimization: null,
       };
@@ -221,6 +248,8 @@ const CategoryDetail = () => {
         }
       } else if (assessmentResponse.data) {
         categoryData.assessment_initial_response = assessmentResponse.data.assessment_initial_response ?? null;
+        categoryData.assessment_antidepressant_switch = assessmentResponse.data.assessment_antidepressant_switch ?? null;
+        categoryData.assessment_antidepressant_augment = assessmentResponse.data.assessment_antidepressant_augment ?? null;
         categoryData.assessment_change_treatment = assessmentResponse.data.assessment_change_treatment ?? null;
         categoryData.assessment_dose_optimization = assessmentResponse.data.assessment_dose_optimization ?? null;
       }
@@ -332,6 +361,8 @@ const CategoryDetail = () => {
 
     if (assessmentResponseFieldsAvailable) {
       payload.assessment_initial_response = toStoredRichText(nextDraft.assessment_initial_response);
+      payload.assessment_antidepressant_switch = toStoredRichText(nextDraft.assessment_antidepressant_switch);
+      payload.assessment_antidepressant_augment = toStoredRichText(nextDraft.assessment_antidepressant_augment);
       payload.assessment_change_treatment = toStoredRichText(nextDraft.assessment_change_treatment);
       payload.assessment_dose_optimization = toStoredRichText(nextDraft.assessment_dose_optimization);
     }
@@ -405,13 +436,13 @@ const CategoryDetail = () => {
       return;
     }
 
-    if (isStructuredAssessmentField(field) && !assessmentResponseFieldsAvailable) {
+    if (isAssessmentResponseSectionField(field) && !assessmentResponseFieldsAvailable) {
       toast.error("Run the latest assessment response migration in Supabase to edit this section.");
       return;
     }
 
     setDraft((prev) => {
-      if (!isStructuredAssessmentField(field) || richTextHasContent(prev[field])) {
+      if (!isDefaultedAssessmentField(field) || richTextHasContent(prev[field])) {
         return prev;
       }
 
@@ -447,14 +478,14 @@ const CategoryDetail = () => {
       return;
     }
 
-    if (isStructuredAssessmentField(field) && !assessmentResponseFieldsAvailable) {
+    if (isAssessmentResponseSectionField(field) && !assessmentResponseFieldsAvailable) {
       toast.error("Run the latest assessment response migration in Supabase to save this section.");
       return;
     }
 
     let normalizedValue = sanitizeRichText(draft[field]);
 
-    if (isStructuredAssessmentField(field) && !richTextHasContent(normalizedValue)) {
+    if (isDefaultedAssessmentField(field) && !richTextHasContent(normalizedValue)) {
       normalizedValue = ASSESSMENT_FIELD_DEFAULTS[field];
     }
 
@@ -799,7 +830,7 @@ const CategoryDetail = () => {
               icon: <RefreshCcw className="h-4 w-4" />,
             },
             {
-              name: "Antidepressant Augment",
+              name: "Completion Of Trial",
               link: "#antidepressant-augment",
               icon: <Pill className="h-4 w-4" />,
             },
@@ -826,7 +857,14 @@ const CategoryDetail = () => {
           >
             {activeTab !== "treatment" && !isAssessmentTab(activeTab) && (
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                <h2 className="font-display text-xl font-semibold text-foreground">{activeSection.label}</h2>
+                <div className="space-y-1">
+                  {activeTab === "diagnosis" ? (
+                    <div className="inline-flex rounded-full border border-border/70 bg-muted/50 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.24em] text-muted-foreground">
+                      1.0
+                    </div>
+                  ) : null}
+                  <h2 className="font-display text-xl font-semibold text-foreground">{activeSection.label}</h2>
+                </div>
                 {canEdit &&
                   (editing ? (
                     <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center">
@@ -898,6 +936,8 @@ const CategoryDetail = () => {
                     onContentChange: (value) =>
                       setDraft((prev) => ({ ...prev, [activeAssessmentNotesField]: value })),
                   }}
+                  notesStepLabel={activeTab === "antidepressant-augment" ? "6.0" : "3.0"}
+                  notesTitle={activeTab === "antidepressant-augment" ? "Completion Of Trial" : "Assessment of Response"}
                   initialResponseSection={{
                     content: draft.assessment_initial_response,
                     canEdit,
@@ -908,6 +948,28 @@ const CategoryDetail = () => {
                     onSave: () => void handleAssessmentSectionSave("assessment_initial_response"),
                     onContentChange: (value) =>
                       setDraft((prev) => ({ ...prev, assessment_initial_response: value })),
+                  }}
+                  antidepressantSwitchSection={{
+                    content: draft.assessment_antidepressant_switch,
+                    canEdit,
+                    isEditing: editingAssessmentSections.assessment_antidepressant_switch,
+                    isSaving: savingAssessmentSection === "assessment_antidepressant_switch",
+                    onStartEditing: () => handleAssessmentSectionStartEditing("assessment_antidepressant_switch"),
+                    onCancelEditing: () => handleAssessmentSectionCancel("assessment_antidepressant_switch"),
+                    onSave: () => void handleAssessmentSectionSave("assessment_antidepressant_switch"),
+                    onContentChange: (value) =>
+                      setDraft((prev) => ({ ...prev, assessment_antidepressant_switch: value })),
+                  }}
+                  antidepressantAugmentSection={{
+                    content: draft.assessment_antidepressant_augment,
+                    canEdit,
+                    isEditing: editingAssessmentSections.assessment_antidepressant_augment,
+                    isSaving: savingAssessmentSection === "assessment_antidepressant_augment",
+                    onStartEditing: () => handleAssessmentSectionStartEditing("assessment_antidepressant_augment"),
+                    onCancelEditing: () => handleAssessmentSectionCancel("assessment_antidepressant_augment"),
+                    onSave: () => void handleAssessmentSectionSave("assessment_antidepressant_augment"),
+                    onContentChange: (value) =>
+                      setDraft((prev) => ({ ...prev, assessment_antidepressant_augment: value })),
                   }}
                   changeTreatmentSection={{
                     content: draft.assessment_change_treatment,

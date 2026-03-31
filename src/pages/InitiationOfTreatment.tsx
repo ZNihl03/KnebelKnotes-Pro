@@ -1169,6 +1169,9 @@ const InitiationOfTreatment = ({
                 Audit tracked
               </Badge>
             </div>
+            <div className="inline-flex self-start rounded-full border border-border/70 bg-muted/50 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.24em] text-muted-foreground">
+              2.0
+            </div>
             <CardTitle>Initiation of Treatment</CardTitle>
             <CardDescription>
               Select a line of treatment first, review the medications configured for that line, then choose a starting
@@ -1292,6 +1295,9 @@ const InitiationOfTreatment = ({
 
                   <Card className="border-dashed border-border/80 bg-muted/15 shadow-none">
                     <CardHeader>
+                      <div className="inline-flex self-start rounded-full border border-border/70 bg-muted/50 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.24em] text-muted-foreground">
+                        2.2
+                      </div>
                       <CardTitle className="text-lg">Select line of treatment</CardTitle>
                       <CardDescription>
                         {rows.length} medication{rows.length === 1 ? "" : "s"} are configured for this category across{" "}
@@ -1387,6 +1393,9 @@ const InitiationOfTreatment = ({
 
                         <section ref={medicationSelectionSectionRef} className="space-y-4">
                           <div className="space-y-1">
+                            <div className="inline-flex self-start rounded-full border border-border/70 bg-muted/50 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.24em] text-muted-foreground">
+                              2.3
+                            </div>
                             <h2 className="font-display text-2xl font-semibold text-foreground">
                               Pick a starting dose and titration schedule
                             </h2>
@@ -1538,6 +1547,9 @@ const InitiationOfTreatment = ({
                         <section className="space-y-4">
                           <div className="flex flex-wrap items-start justify-between gap-3">
                             <div className="space-y-1">
+                              <div className="inline-flex self-start rounded-full border border-border/70 bg-muted/50 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.24em] text-muted-foreground">
+                                2.4
+                              </div>
                               <div className="flex items-center gap-2">
                                 <h2 className="font-display text-2xl font-semibold text-foreground">
                                   Patient education

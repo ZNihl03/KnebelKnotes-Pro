@@ -35,6 +35,8 @@ const mockCategory = {
   antidepressant_augment: "<p>Augment notes</p>",
   trial: null,
   assessment_initial_response: "<p>Initial response content</p>",
+  assessment_antidepressant_switch: "<p>Switch content</p>",
+  assessment_antidepressant_augment: "<p>Augment pathway content</p>",
   assessment_change_treatment: "<p>Change treatment content</p>",
   assessment_dose_optimization: "<p>Dose optimization content</p>",
 };
@@ -84,7 +86,7 @@ describe("CategoryDetail", () => {
     } as never);
   });
 
-  it("shows the Antidepressant Augment floating tab with separate content", async () => {
+  it("shows the Completion Of Trial floating tab with separate content", async () => {
     render(
       <MemoryRouter initialEntries={["/category/category-1"]}>
         <UiPreferencesProvider>
@@ -99,7 +101,7 @@ describe("CategoryDetail", () => {
       expect(screen.getByRole("heading", { name: "Depression" })).toBeInTheDocument();
     });
 
-    const augmentTab = screen.getByRole("link", { name: "Antidepressant Augment" });
+    const augmentTab = screen.getByRole("link", { name: "Completion Of Trial" });
     expect(augmentTab).toBeInTheDocument();
 
     fireEvent.click(augmentTab);
@@ -108,12 +110,15 @@ describe("CategoryDetail", () => {
       expect(augmentTab).toHaveAttribute("aria-current", "page");
     });
 
-    expect(screen.getByText("Additional assessment notes")).toBeInTheDocument();
+    expect(screen.getByText("6.0")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Completion Of Trial", level: 3 })).toBeInTheDocument();
     expect(screen.getByText("Augment notes")).toBeInTheDocument();
     expect(screen.queryByText("Assessment notes")).not.toBeInTheDocument();
     expect(screen.queryByText("Current response pattern")).not.toBeInTheDocument();
     expect(screen.queryByText("3.1.1")).not.toBeInTheDocument();
     expect(screen.queryByText("Assessment of initial response")).not.toBeInTheDocument();
+    expect(screen.queryByText("Antidepressant Switch")).not.toBeInTheDocument();
+    expect(screen.queryByText("Antidepressant Augment")).not.toBeInTheDocument();
     expect(screen.queryByText("Assess for change of treatment")).not.toBeInTheDocument();
   });
 
@@ -132,6 +137,8 @@ describe("CategoryDetail", () => {
       expect(screen.getByRole("heading", { name: "Depression" })).toBeInTheDocument();
     });
 
+    expect(screen.getByText("1.0")).toBeInTheDocument();
+
     const backButton = screen.getByRole("button", { name: "Back" });
     expect(backButton).toBeDisabled();
 
@@ -149,14 +156,19 @@ describe("CategoryDetail", () => {
       expect(screen.getByRole("link", { name: "Assessment of Response" })).toHaveAttribute("aria-current", "page");
     });
 
-    expect(screen.getByText("Additional assessment notes")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Assessment of Response", level: 3 })).toBeInTheDocument();
+    expect(screen.getByText("4.0")).toBeInTheDocument();
+    expect(screen.getByText("5.0")).toBeInTheDocument();
+    expect(screen.getByText("Antidepressant Switch")).toBeInTheDocument();
+    expect(screen.getByText("Antidepressant Augment")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Next: Antidepressant Augment" }));
+    fireEvent.click(screen.getByRole("button", { name: "Next: Completion Of Trial" }));
 
     await waitFor(() => {
-      expect(screen.getByRole("link", { name: "Antidepressant Augment" })).toHaveAttribute("aria-current", "page");
+      expect(screen.getByRole("link", { name: "Completion Of Trial" })).toHaveAttribute("aria-current", "page");
     });
 
+    expect(screen.getByRole("heading", { name: "Completion Of Trial", level: 3 })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Next" })).toBeDisabled();
 
     fireEvent.click(screen.getByRole("button", { name: "Back: Assessment of Response" }));
@@ -193,10 +205,10 @@ describe("CategoryDetail", () => {
       expect(screen.getByRole("heading", { name: "Depression" })).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByRole("link", { name: "Antidepressant Augment" }));
+    fireEvent.click(screen.getByRole("link", { name: "Completion Of Trial" }));
 
     await waitFor(() => {
-      expect(screen.getByRole("link", { name: "Antidepressant Augment" })).toHaveAttribute("aria-current", "page");
+      expect(screen.getByRole("link", { name: "Completion Of Trial" })).toHaveAttribute("aria-current", "page");
     });
 
     fireEvent.click(screen.getByRole("button", { name: "Edit" }));

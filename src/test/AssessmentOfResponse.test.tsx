@@ -19,10 +19,19 @@ describe("AssessmentOfResponse", () => {
       <AssessmentOfResponse
         notesSection={createSectionProps()}
         initialResponseSection={createSectionProps()}
+        antidepressantSwitchSection={createSectionProps()}
+        antidepressantAugmentSection={createSectionProps()}
         changeTreatmentSection={createSectionProps()}
         doseOptimizationSection={createSectionProps()}
+        notesStepLabel="3.0"
       />,
     );
+
+    expect(screen.getByText("3.0")).toBeInTheDocument();
+    expect(screen.getByText("4.0")).toBeInTheDocument();
+    expect(screen.getByText("5.0")).toBeInTheDocument();
+    expect(screen.getByText("Antidepressant Switch")).toBeInTheDocument();
+    expect(screen.getByText("Antidepressant Augment")).toBeInTheDocument();
 
     const scenarioSelect = screen.getByLabelText("Current response pattern");
 
