@@ -57,6 +57,7 @@ describe("InitiationOfTreatment", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    window.localStorage.clear();
     Object.defineProperty(HTMLElement.prototype, "hasPointerCapture", {
       configurable: true,
       value: vi.fn(() => false),
@@ -267,6 +268,106 @@ describe("InitiationOfTreatment", () => {
       screen.queryByText((content, element) => element?.tagName.toLowerCase() === "p" && content === "Frequency"),
     ).not.toBeInTheDocument();
     expect(scrollIntoViewMock).toHaveBeenCalled();
+  });
+
+  it("shows one shared titration schedule editor for the category after a medication is selected", async () => {
+    vi.mocked(useAuth).mockReturnValue({
+      user: null,
+      profile: null,
+      loading: false,
+      session: null,
+      signIn: vi.fn(),
+      signOut: vi.fn(),
+      refreshProfile: vi.fn(),
+    });
+
+    vi.mocked(supabase.rpc).mockResolvedValue({
+      data: [
+        {
+          id: "drug-1",
+          category_id: "category-1",
+          drug_name: "Sertraline",
+          medication_type: "monotherapy",
+          frequency: "daily",
+          tolerability_less: null,
+          tolerability_more: null,
+          safety: null,
+          cost: null,
+          line_of_treatment: 1,
+          initiation_dose_mg: 50,
+          therapeutic_min_dose_mg: 50,
+          therapeutic_max_dose_mg: 200,
+          max_dose_mg: 200,
+          updated_at: "2026-03-16T12:00:00.000Z",
+          is_active: true,
+        },
+        {
+          id: "drug-2",
+          category_id: "category-1",
+          drug_name: "Escitalopram",
+          medication_type: "monotherapy",
+          frequency: "daily",
+          tolerability_less: null,
+          tolerability_more: null,
+          safety: null,
+          cost: null,
+          line_of_treatment: 1,
+          initiation_dose_mg: 10,
+          therapeutic_min_dose_mg: 10,
+          therapeutic_max_dose_mg: 20,
+          max_dose_mg: 20,
+          updated_at: "2026-03-16T12:00:00.000Z",
+          is_active: true,
+        },
+      ],
+      error: null,
+    } as never);
+
+    const { container } = render(
+      <MemoryRouter>
+        <InitiationOfTreatment categoryId="category-1" categoryName="Depression" />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("Initiation of Treatment")).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Line 1" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Select medication Sertraline" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Select medication Escitalopram" })).toBeInTheDocument();
+    });
+
+    expect(screen.queryByText("Titration Schedule")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Select medication Sertraline" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("Titration Schedule")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Edit titration schedule" })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit titration schedule" }));
+
+    const editor = container.querySelector('[contenteditable="true"]') as HTMLDivElement;
+    editor.innerHTML = "<p>Shared titration note.</p>";
+    fireEvent.input(editor);
+    fireEvent.blur(editor);
+
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("Shared titration note.")).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Select medication Escitalopram" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("combobox")).toHaveTextContent("Escitalopram");
+      expect(screen.getByText("Shared titration note.")).toBeInTheDocument();
+    });
   });
 
   it("keeps signed-in workflow actions while omitting the updated and therapeutic range table columns", async () => {

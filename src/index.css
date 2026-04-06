@@ -55,6 +55,19 @@
     --page-gradient: radial-gradient(1200px 600px at 10% -10%, hsl(215 70% 92% / 0.7), transparent 60%),
       radial-gradient(800px 500px at 90% 0%, hsl(24 90% 90% / 0.4), transparent 55%),
       linear-gradient(180deg, hsl(28 40% 98%), hsl(28 40% 96%));
+    --rich-text-text-light-red: #b42318;
+    --rich-text-text-light-blue: #175cd3;
+    --rich-text-text-light-green: #027a48;
+    --rich-text-text-black: #344054;
+    --rich-text-text-yellow: #b54708;
+    --rich-text-text-white: #98a2b3;
+    --rich-text-highlight-light-red: #fecdd3;
+    --rich-text-highlight-light-blue: #bfdbfe;
+    --rich-text-highlight-light-green: #bbf7d0;
+    --rich-text-highlight-black: #cbd5e1;
+    --rich-text-highlight-yellow: #fef08a;
+    --rich-text-highlight-white: #fffef7;
+    --rich-text-highlight-white-ring: rgb(15 23 42 / 0.12);
   }
 
   :root[data-theme="dark"] {
@@ -98,6 +111,19 @@
     --page-gradient: radial-gradient(1000px 500px at 10% -10%, hsl(200 70% 30% / 0.25), transparent 60%),
       radial-gradient(700px 400px at 90% 0%, hsl(26 70% 35% / 0.2), transparent 55%),
       linear-gradient(180deg, hsl(215 28% 10%), hsl(215 30% 8%));
+    --rich-text-text-light-red: #fda29b;
+    --rich-text-text-light-blue: #84caff;
+    --rich-text-text-light-green: #6ce9a6;
+    --rich-text-text-black: #d0d5dd;
+    --rich-text-text-yellow: #fecd68;
+    --rich-text-text-white: #f8fafc;
+    --rich-text-highlight-light-red: rgb(244 114 182 / 0.28);
+    --rich-text-highlight-light-blue: rgb(96 165 250 / 0.25);
+    --rich-text-highlight-light-green: rgb(74 222 128 / 0.25);
+    --rich-text-highlight-black: rgb(148 163 184 / 0.28);
+    --rich-text-highlight-yellow: rgb(250 204 21 / 0.28);
+    --rich-text-highlight-white: rgb(248 250 252 / 0.2);
+    --rich-text-highlight-white-ring: rgb(248 250 252 / 0.12);
   }
 }
 
@@ -252,5 +278,74 @@
     content: attr(data-placeholder);
     color: hsl(var(--muted-foreground));
     pointer-events: none;
+  }
+
+  .rich-text-content [data-text-color="light-red"],
+  .rich-text-editor [data-text-color="light-red"] {
+    color: var(--rich-text-text-light-red);
+  }
+
+  .rich-text-content [data-text-color="light-blue"],
+  .rich-text-editor [data-text-color="light-blue"] {
+    color: var(--rich-text-text-light-blue);
+  }
+
+  .rich-text-content [data-text-color="light-green"],
+  .rich-text-editor [data-text-color="light-green"] {
+    color: var(--rich-text-text-light-green);
+  }
+
+  .rich-text-content [data-text-color="black"],
+  .rich-text-editor [data-text-color="black"] {
+    color: var(--rich-text-text-black);
+  }
+
+  .rich-text-content [data-text-color="yellow"],
+  .rich-text-editor [data-text-color="yellow"] {
+    color: var(--rich-text-text-yellow);
+  }
+
+  .rich-text-content [data-text-color="white"],
+  .rich-text-editor [data-text-color="white"] {
+    color: var(--rich-text-text-white);
+  }
+
+  .rich-text-content [data-highlight-color],
+  .rich-text-editor [data-highlight-color] {
+    border-radius: 0.25rem;
+    box-decoration-break: clone;
+    -webkit-box-decoration-break: clone;
+    padding-inline: 0.08em;
+  }
+
+  .rich-text-content [data-highlight-color="light-red"],
+  .rich-text-editor [data-highlight-color="light-red"] {
+    background-color: var(--rich-text-highlight-light-red);
+  }
+
+  .rich-text-content [data-highlight-color="light-blue"],
+  .rich-text-editor [data-highlight-color="light-blue"] {
+    background-color: var(--rich-text-highlight-light-blue);
+  }
+
+  .rich-text-content [data-highlight-color="light-green"],
+  .rich-text-editor [data-highlight-color="light-green"] {
+    background-color: var(--rich-text-highlight-light-green);
+  }
+
+  .rich-text-content [data-highlight-color="black"],
+  .rich-text-editor [data-highlight-color="black"] {
+    background-color: var(--rich-text-highlight-black);
+  }
+
+  .rich-text-content [data-highlight-color="yellow"],
+  .rich-text-editor [data-highlight-color="yellow"] {
+    background-color: var(--rich-text-highlight-yellow);
+  }
+
+  .rich-text-content [data-highlight-color="white"],
+  .rich-text-editor [data-highlight-color="white"] {
+    background-color: var(--rich-text-highlight-white);
+    box-shadow: inset 0 0 0 1px var(--rich-text-highlight-white-ring);
   }
 }

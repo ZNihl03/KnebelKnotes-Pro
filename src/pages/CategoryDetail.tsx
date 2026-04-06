@@ -197,6 +197,8 @@ const CategoryDetail = () => {
   const [metaDescription, setMetaDescription] = useState("");
   const [savingMeta, setSavingMeta] = useState(false);
   const [draft, setDraft] = useState<SectionDraft>(createSectionDraft());
+  const pageTopRef = useRef<HTMLDivElement | null>(null);
+  const shouldResetScrollRef = useRef(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -294,7 +296,8 @@ const CategoryDetail = () => {
     [authLoading, profile?.role],
   );
 
-  const handleJump = (key: SectionKey) => {
+  const handleJump = (key: SectionKey, options?: { resetScroll?: boolean }) => {
+    shouldResetScrollRef.current = options?.resetScroll ?? false;
     setActiveTab(key);
     navigate(
       {
@@ -336,6 +339,16 @@ const CategoryDetail = () => {
       setActiveTab(nextSection);
     }
   }, [location.hash]);
+
+  useEffect(() => {
+    if (!shouldResetScrollRef.current) return;
+
+    shouldResetScrollRef.current = false;
+    pageTopRef.current?.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    });
+  }, [activeTab]);
 
   const handleCancel = () => {
     if (!category) return;
@@ -687,7 +700,7 @@ const CategoryDetail = () => {
   return (
     <Layout>
       <div className="pb-16 sm:pb-10">
-        <div className="container py-6 sm:py-8">
+        <div ref={pageTopRef} className="container scroll-mt-24 py-6 sm:scroll-mt-28 sm:py-8">
           <nav className="mb-6 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground sm:text-sm">
             <Link to="/" className="hover:text-foreground transition-colors">
               Home
@@ -1026,7 +1039,7 @@ const CategoryDetail = () => {
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => previousSection && handleJump(previousSection.key)}
+                  onClick={() => previousSection && handleJump(previousSection.key, { resetScroll: true })}
                   disabled={!previousSection}
                   className="w-full sm:w-auto"
                   aria-label={previousSection ? `Back: ${previousSection.label}` : "Back"}
@@ -1036,7 +1049,7 @@ const CategoryDetail = () => {
                 </Button>
                 <Button
                   type="button"
-                  onClick={() => nextSection && handleJump(nextSection.key)}
+                  onClick={() => nextSection && handleJump(nextSection.key, { resetScroll: true })}
                   disabled={!nextSection}
                   className="w-full sm:w-auto"
                   aria-label={nextSection ? `Next: ${nextSection.label}` : "Next"}

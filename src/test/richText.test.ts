@@ -20,6 +20,21 @@ describe("rich text helpers", () => {
     );
   });
 
+  it("maps supported palette colors to theme-aware tokens", () => {
+    const sanitized = sanitizeRichText(
+      '<font color="#000000">Black</font><span style="background-color: rgb(254, 240, 138)">Marked</span>',
+    );
+    const container = document.createElement("div");
+    container.innerHTML = sanitized;
+    const spans = container.querySelectorAll("span");
+
+    expect(spans).toHaveLength(2);
+    expect(spans[0].getAttribute("data-text-color")).toBe("black");
+    expect(spans[0].textContent).toBe("Black");
+    expect(spans[1].getAttribute("data-highlight-color")).toBe("yellow");
+    expect(spans[1].textContent).toBe("Marked");
+  });
+
   it("converts empty rich text to null for storage", () => {
     expect(toStoredRichText("<div><br></div>")).toBeNull();
     expect(richTextHasContent("&nbsp;")).toBe(false);

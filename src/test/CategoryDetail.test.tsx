@@ -42,15 +42,22 @@ const mockCategory = {
 };
 
 let updateMock: ReturnType<typeof vi.fn>;
+const scrollIntoViewMock = vi.fn();
 
 describe("CategoryDetail", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    scrollIntoViewMock.mockClear();
     updateMock = vi.fn(() => ({
       eq: vi.fn().mockResolvedValue({
         error: null,
       }),
     }));
+
+    Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
+      configurable: true,
+      value: scrollIntoViewMock,
+    });
 
     vi.mocked(useAuth).mockReturnValue({
       user: null,
@@ -175,6 +182,48 @@ describe("CategoryDetail", () => {
 
     await waitFor(() => {
       expect(screen.getByRole("link", { name: "Assessment of Response" })).toHaveAttribute("aria-current", "page");
+    });
+  });
+
+  it("scrolls to the top when next and back buttons change tabs", async () => {
+    render(
+      <MemoryRouter initialEntries={["/category/category-1"]}>
+        <UiPreferencesProvider>
+          <Routes>
+            <Route path="/category/:id" element={<CategoryDetail />} />
+          </Routes>
+        </UiPreferencesProvider>
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "Depression" })).toBeInTheDocument();
+    });
+
+    scrollIntoViewMock.mockClear();
+
+    fireEvent.click(screen.getByRole("button", { name: "Next: Initiation of Treatment" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("link", { name: "Initiation of Treatment" })).toHaveAttribute("aria-current", "page");
+    });
+
+    expect(scrollIntoViewMock).toHaveBeenCalledWith({
+      behavior: "smooth",
+      block: "start",
+    });
+
+    scrollIntoViewMock.mockClear();
+
+    fireEvent.click(screen.getByRole("button", { name: "Back: Diagnosis" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("link", { name: "Diagnosis" })).toHaveAttribute("aria-current", "page");
+    });
+
+    expect(scrollIntoViewMock).toHaveBeenCalledWith({
+      behavior: "smooth",
+      block: "start",
     });
   });
 

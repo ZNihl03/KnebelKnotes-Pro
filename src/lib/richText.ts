@@ -19,8 +19,206 @@ const LEGACY_FONT_SIZE_MAP = new Map<string, string>([
   ["6", "30"],
   ["7", "30"],
 ]);
+const HEX_COLOR_PATTERN = /^#([\da-f]{3}|[\da-f]{6})$/i;
+const RGB_COLOR_PATTERN =
+  /^rgba?\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})(?:\s*,\s*(0|0?\.\d+|1(?:\.0+)?))?\s*\)$/i;
+
+type RichTextColorContext = "text" | "highlight";
+
+export type RichTextColorToken =
+  | "light-red"
+  | "light-blue"
+  | "light-green"
+  | "black"
+  | "yellow"
+  | "white";
+
+type RichTextColorOption = {
+  token: RichTextColorToken;
+  label: string;
+  textCommandColor: string;
+  highlightCommandColor: string;
+  textPreviewLight: string;
+  textPreviewDark: string;
+  highlightPreviewLight: string;
+  highlightPreviewDark: string;
+  textAliases: string[];
+  highlightAliases: string[];
+};
+
+export const RICH_TEXT_COLOR_OPTIONS: RichTextColorOption[] = [
+  {
+    token: "light-red",
+    label: "Light Red",
+    textCommandColor: "#d92d20",
+    highlightCommandColor: "#fecdd3",
+    textPreviewLight: "#b42318",
+    textPreviewDark: "#fda29b",
+    highlightPreviewLight: "#fecdd3",
+    highlightPreviewDark: "#be123c",
+    textAliases: ["#d92d20", "#fecaca"],
+    highlightAliases: ["#fecdd3", "#fecaca"],
+  },
+  {
+    token: "light-blue",
+    label: "Light Blue",
+    textCommandColor: "#1570ef",
+    highlightCommandColor: "#bfdbfe",
+    textPreviewLight: "#175cd3",
+    textPreviewDark: "#84caff",
+    highlightPreviewLight: "#bfdbfe",
+    highlightPreviewDark: "#1d4ed8",
+    textAliases: ["#1570ef", "#bfdbfe"],
+    highlightAliases: ["#bfdbfe"],
+  },
+  {
+    token: "light-green",
+    label: "Light Green",
+    textCommandColor: "#12b76a",
+    highlightCommandColor: "#bbf7d0",
+    textPreviewLight: "#027a48",
+    textPreviewDark: "#6ce9a6",
+    highlightPreviewLight: "#bbf7d0",
+    highlightPreviewDark: "#15803d",
+    textAliases: ["#12b76a", "#bbf7d0"],
+    highlightAliases: ["#bbf7d0"],
+  },
+  {
+    token: "black",
+    label: "Black",
+    textCommandColor: "#475467",
+    highlightCommandColor: "#cbd5e1",
+    textPreviewLight: "#344054",
+    textPreviewDark: "#d0d5dd",
+    highlightPreviewLight: "#cbd5e1",
+    highlightPreviewDark: "#64748b",
+    textAliases: ["#475467", "#000000"],
+    highlightAliases: ["#cbd5e1", "#000000"],
+  },
+  {
+    token: "yellow",
+    label: "Yellow",
+    textCommandColor: "#b54708",
+    highlightCommandColor: "#fef08a",
+    textPreviewLight: "#b54708",
+    textPreviewDark: "#fecd68",
+    highlightPreviewLight: "#fef08a",
+    highlightPreviewDark: "#ca8a04",
+    textAliases: ["#b54708", "#fef08a"],
+    highlightAliases: ["#fef08a"],
+  },
+  {
+    token: "white",
+    label: "White",
+    textCommandColor: "#d0d5dd",
+    highlightCommandColor: "#fffef7",
+    textPreviewLight: "#98a2b3",
+    textPreviewDark: "#f8fafc",
+    highlightPreviewLight: "#fffef7",
+    highlightPreviewDark: "#e2e8f0",
+    textAliases: ["#d0d5dd", "#ffffff"],
+    highlightAliases: ["#fffef7", "#ffffff"],
+  },
+];
+
+const RICH_TEXT_COLOR_TOKENS = new Set(RICH_TEXT_COLOR_OPTIONS.map((option) => option.token));
+
+export const DEFAULT_RICH_TEXT_TEXT_COLOR: RichTextColorToken = "black";
+export const DEFAULT_RICH_TEXT_HIGHLIGHT_COLOR: RichTextColorToken = "yellow";
 
 const createHtmlDocument = () => document.implementation.createHTMLDocument("");
+
+const normalizeHexColor = (value: string) => {
+  if (!HEX_COLOR_PATTERN.test(value)) {
+    return null;
+  }
+
+  const normalized = value.toLowerCase();
+  if (normalized.length === 4) {
+    const [, r, g, b] = normalized;
+    return `#${r}${r}${g}${g}${b}${b}`;
+  }
+
+  return normalized;
+};
+
+export const normalizeRichTextColor = (value: string | null | undefined) => {
+  if (!value) {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const normalizedHex = normalizeHexColor(trimmed);
+  if (normalizedHex) {
+    return normalizedHex;
+  }
+
+  const rgbMatch = trimmed.match(RGB_COLOR_PATTERN);
+  if (!rgbMatch) {
+    return null;
+  }
+
+  const [, red, green, blue, alpha] = rgbMatch;
+  if (alpha !== undefined && Number.parseFloat(alpha) === 0) {
+    return null;
+  }
+
+  const channels = [red, green, blue].map((channel) => Number.parseInt(channel, 10));
+  if (channels.some((channel) => Number.isNaN(channel) || channel < 0 || channel > 255)) {
+    return null;
+  }
+
+  return `#${channels.map((channel) => channel.toString(16).padStart(2, "0")).join("")}`;
+};
+
+export const isRichTextColorToken = (value: string | null | undefined): value is RichTextColorToken =>
+  Boolean(value && RICH_TEXT_COLOR_TOKENS.has(value as RichTextColorToken));
+
+export const getRichTextColorToken = (
+  value: string | null | undefined,
+  context: RichTextColorContext,
+): RichTextColorToken | null => {
+  if (!value) {
+    return null;
+  }
+
+  const trimmed = value.trim().toLowerCase();
+  if (!trimmed) {
+    return null;
+  }
+
+  if (isRichTextColorToken(trimmed)) {
+    return trimmed;
+  }
+
+  const normalizedColor = normalizeRichTextColor(trimmed);
+  if (!normalizedColor) {
+    return null;
+  }
+
+  const matchedOption = RICH_TEXT_COLOR_OPTIONS.find((option) => {
+    const aliases = context === "text" ? option.textAliases : option.highlightAliases;
+    return aliases.includes(normalizedColor);
+  });
+
+  return matchedOption?.token ?? null;
+};
+
+export const getRichTextColorCommandValue = (
+  token: RichTextColorToken,
+  context: RichTextColorContext,
+) => {
+  const option = RICH_TEXT_COLOR_OPTIONS.find((item) => item.token === token);
+  if (!option) {
+    return null;
+  }
+
+  return context === "text" ? option.textCommandColor : option.highlightCommandColor;
+};
 
 const appendTextWithBreaks = (doc: Document, target: Node, text: string) => {
   const parts = text.replace(/\r\n?/g, "\n").split("\n");
@@ -64,10 +262,58 @@ const sanitizeNode = (node: Node, doc: Document): Node => {
       element.getAttribute("data-font-size") ??
       LEGACY_FONT_SIZE_MAP.get(element.getAttribute("size") ?? "") ??
       null;
+    const textColorToken = getRichTextColorToken(
+      element.getAttribute("data-text-color") ??
+        element.getAttribute("color") ??
+        element.style.color ??
+        null,
+      "text",
+    );
+    const highlightColorToken = getRichTextColorToken(
+      element.getAttribute("data-highlight-color") ??
+        element.getAttribute("bgcolor") ??
+        element.style.backgroundColor ??
+        null,
+      "highlight",
+    );
+    const textColor =
+      textColorToken ||
+      normalizeRichTextColor(
+        element.getAttribute("data-text-color") ??
+          element.getAttribute("color") ??
+          element.style.color ??
+          null,
+      );
+    const highlightColor =
+      highlightColorToken ||
+      normalizeRichTextColor(
+        element.getAttribute("data-highlight-color") ??
+          element.getAttribute("bgcolor") ??
+          element.style.backgroundColor ??
+          null,
+      );
 
-    if (fontSize && FONT_SIZE_VALUES.has(fontSize)) {
+    if ((fontSize && FONT_SIZE_VALUES.has(fontSize)) || textColor || highlightColor) {
       const cleanElement = doc.createElement("span");
-      cleanElement.setAttribute("data-font-size", fontSize);
+
+      if (fontSize && FONT_SIZE_VALUES.has(fontSize)) {
+        cleanElement.setAttribute("data-font-size", fontSize);
+      }
+
+      if (textColor) {
+        cleanElement.setAttribute("data-text-color", textColor);
+        if (!textColorToken) {
+          cleanElement.style.color = textColor;
+        }
+      }
+
+      if (highlightColor) {
+        cleanElement.setAttribute("data-highlight-color", highlightColor);
+        if (!highlightColorToken) {
+          cleanElement.style.backgroundColor = highlightColor;
+        }
+      }
+
       cleanElement.appendChild(fragment);
       return cleanElement;
     }
