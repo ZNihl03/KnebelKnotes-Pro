@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
@@ -323,11 +324,28 @@ describe("InitiationOfTreatment", () => {
       error: null,
     } as never);
 
-    const { container } = render(
-      <MemoryRouter>
-        <InitiationOfTreatment categoryId="category-1" categoryName="Depression" />
-      </MemoryRouter>,
-    );
+    const TitrationScheduleHarness = () => {
+      const [titrationSchedule, setTitrationSchedule] = useState("");
+      const [editingTitrationSchedule, setEditingTitrationSchedule] = useState(false);
+
+      return (
+        <MemoryRouter>
+          <InitiationOfTreatment
+            categoryId="category-1"
+            categoryName="Depression"
+            canEditTitrationSchedule
+            titrationScheduleContent={titrationSchedule}
+            isEditingTitrationSchedule={editingTitrationSchedule}
+            onStartEditingTitrationSchedule={() => setEditingTitrationSchedule(true)}
+            onCancelEditingTitrationSchedule={() => setEditingTitrationSchedule(false)}
+            onSaveTitrationSchedule={() => setEditingTitrationSchedule(false)}
+            onTitrationScheduleContentChange={setTitrationSchedule}
+          />
+        </MemoryRouter>
+      );
+    };
+
+    const { container } = render(<TitrationScheduleHarness />);
 
     await waitFor(() => {
       expect(screen.getByText("Initiation of Treatment")).toBeInTheDocument();

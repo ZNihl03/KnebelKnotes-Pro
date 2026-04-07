@@ -18,7 +18,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/contexts/AuthContext";
 import RichTextEditor from "@/components/RichTextEditor";
 import { formatDoseMg, formatDoseRangeMg } from "@/lib/treatmentProgression";
-import { richTextHasContent, sanitizeRichText } from "@/lib/richText";
+import { richTextHasContent } from "@/lib/richText";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -478,38 +478,11 @@ const renderCostValue = (value: string | null) => {
   return <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${toneClasses}`}>{value}</span>;
 };
 
-const TITRATION_SCHEDULE_STORAGE_KEY = "initiation-of-treatment-titration-schedules";
-
-const loadStoredTitrationSchedules = () => {
-  if (typeof window === "undefined") {
-    return {} as Record<string, string>;
-  }
-
-  try {
-    const stored = window.localStorage.getItem(TITRATION_SCHEDULE_STORAGE_KEY);
-    if (!stored) {
-      return {} as Record<string, string>;
-    }
-
-    const parsed = JSON.parse(stored);
-    if (!parsed || typeof parsed !== "object") {
-      return {} as Record<string, string>;
-    }
-
-    return Object.fromEntries(
-      Object.entries(parsed)
-        .filter((entry): entry is [string, string] => typeof entry[1] === "string")
-        .map(([key, value]) => [key, sanitizeRichText(value)]),
-    );
-  } catch {
-    return {} as Record<string, string>;
-  }
-};
-
 type InitiationOfTreatmentProps = {
   categoryId: string;
   categoryName?: string;
   factorsContent?: string;
+  titrationScheduleContent?: string;
   patientEducationContent?: string;
   canEditContent?: boolean;
   isEditingFactors?: boolean;
@@ -517,12 +490,19 @@ type InitiationOfTreatmentProps = {
   onStartEditingFactors?: () => void;
   onCancelEditingFactors?: () => void;
   onSaveFactors?: () => void;
+  canEditTitrationSchedule?: boolean;
+  isEditingTitrationSchedule?: boolean;
+  isSavingTitrationSchedule?: boolean;
+  onStartEditingTitrationSchedule?: () => void;
+  onCancelEditingTitrationSchedule?: () => void;
+  onSaveTitrationSchedule?: () => void;
   isEditingPatientEducation?: boolean;
   isSavingPatientEducation?: boolean;
   onStartEditingPatientEducation?: () => void;
   onCancelEditingPatientEducation?: () => void;
   onSavePatientEducation?: () => void;
   onFactorsContentChange?: (value: string) => void;
+  onTitrationScheduleContentChange?: (value: string) => void;
   onPatientEducationContentChange?: (value: string) => void;
 };
 
@@ -530,6 +510,7 @@ const InitiationOfTreatment = ({
   categoryId,
   categoryName,
   factorsContent = "",
+  titrationScheduleContent = "",
   patientEducationContent = "",
   canEditContent = false,
   isEditingFactors = false,
@@ -537,12 +518,19 @@ const InitiationOfTreatment = ({
   onStartEditingFactors,
   onCancelEditingFactors,
   onSaveFactors,
+  canEditTitrationSchedule = false,
+  isEditingTitrationSchedule = false,
+  isSavingTitrationSchedule = false,
+  onStartEditingTitrationSchedule,
+  onCancelEditingTitrationSchedule,
+  onSaveTitrationSchedule,
   isEditingPatientEducation = false,
   isSavingPatientEducation = false,
   onStartEditingPatientEducation,
   onCancelEditingPatientEducation,
   onSavePatientEducation,
   onFactorsContentChange,
+  onTitrationScheduleContentChange,
   onPatientEducationContentChange,
 }: InitiationOfTreatmentProps) => {
   const { user, profile, loading: authLoading } = useAuth();
@@ -578,9 +566,6 @@ const InitiationOfTreatment = ({
   const [selectedLine, setSelectedLine] = useState("");
   const [selectedMedicationId, setSelectedMedicationId] = useState("");
   const [isLineTableCollapsed, setIsLineTableCollapsed] = useState(false);
-  const [titrationSchedules, setTitrationSchedules] = useState<Record<string, string>>(loadStoredTitrationSchedules);
-  const [titrationScheduleDrafts, setTitrationScheduleDrafts] = useState<Record<string, string>>({});
-  const [editingTitrationScheduleKeys, setEditingTitrationScheduleKeys] = useState<Record<string, boolean>>({});
   const medicationSelectionSectionRef = useRef<HTMLElement | null>(null);
 
   const canApprove = profile?.role === "super_admin";
@@ -739,43 +724,15 @@ const InitiationOfTreatment = ({
     () => selectedLineRows.find((row) => row.id === selectedMedicationId) ?? null,
     [selectedLineRows, selectedMedicationId],
   );
-  const categoryTitrationSchedule = useMemo(() => {
-    const directValue = titrationSchedules[categoryId];
-    if (typeof directValue === "string") {
-      return directValue;
-    }
-
-    const legacyValue = Object.entries(titrationSchedules).find(
-      ([key, value]) => key.startsWith(`${categoryId}:`) && richTextHasContent(value),
-    )?.[1];
-
-    return legacyValue ?? "";
-  }, [categoryId, titrationSchedules]);
-  const categoryTitrationScheduleDraft = useMemo(
-    () => titrationScheduleDrafts[categoryId] ?? categoryTitrationSchedule,
-    [categoryTitrationSchedule, categoryId, titrationScheduleDrafts],
-  );
-  const isEditingCategoryTitrationSchedule = useMemo(
-    () => Boolean(editingTitrationScheduleKeys[categoryId]),
-    [categoryId, editingTitrationScheduleKeys],
-  );
-  const categoryTitrationScheduleHasValue = useMemo(
-    () => richTextHasContent(categoryTitrationSchedule),
-    [categoryTitrationSchedule],
+  const titrationScheduleHasValue = useMemo(
+    () => richTextHasContent(titrationScheduleContent),
+    [titrationScheduleContent],
   );
   const factorsContentHasValue = useMemo(() => richTextHasContent(factorsContent), [factorsContent]);
   const patientEducationContentHasValue = useMemo(
     () => richTextHasContent(patientEducationContent),
     [patientEducationContent],
   );
-
-  useEffect(() => {
-    try {
-      window.localStorage.setItem(TITRATION_SCHEDULE_STORAGE_KEY, JSON.stringify(titrationSchedules));
-    } catch {
-      // Ignore storage failures and keep the in-memory values.
-    }
-  }, [titrationSchedules]);
 
   const handleLineChange = (value: string) => {
     setSelectedLine(value);
@@ -793,81 +750,6 @@ const InitiationOfTreatment = ({
       });
     }
   }, []);
-
-  const handleTitrationScheduleChange = (value: string) => {
-    if (!categoryId) {
-      return;
-    }
-
-    setTitrationScheduleDrafts((prev) => ({
-      ...prev,
-      [categoryId]: value,
-    }));
-  };
-
-  const handleStartEditingTitrationSchedule = () => {
-    if (!categoryId) {
-      return;
-    }
-
-    setTitrationScheduleDrafts((prev) => ({
-      ...prev,
-      [categoryId]: categoryTitrationSchedule,
-    }));
-    setEditingTitrationScheduleKeys((prev) => ({
-      ...prev,
-      [categoryId]: true,
-    }));
-  };
-
-  const handleCancelTitrationSchedule = () => {
-    if (!categoryId) {
-      return;
-    }
-
-    setTitrationScheduleDrafts((prev) => ({
-      ...prev,
-      [categoryId]: categoryTitrationSchedule,
-    }));
-    setEditingTitrationScheduleKeys((prev) => ({
-      ...prev,
-      [categoryId]: false,
-    }));
-  };
-
-  const handleSaveTitrationSchedule = () => {
-    if (!categoryId) {
-      return;
-    }
-
-    const normalizedValue = sanitizeRichText(categoryTitrationScheduleDraft);
-
-    setTitrationSchedules((prev) => {
-      const next = { ...prev };
-      Object.keys(next).forEach((key) => {
-        if (key.startsWith(`${categoryId}:`)) {
-          delete next[key];
-        }
-      });
-
-      if (richTextHasContent(normalizedValue)) {
-        next[categoryId] = normalizedValue;
-      } else {
-        delete next[categoryId];
-      }
-
-      return next;
-    });
-
-    setTitrationScheduleDrafts((prev) => ({
-      ...prev,
-      [categoryId]: normalizedValue,
-    }));
-    setEditingTitrationScheduleKeys((prev) => ({
-      ...prev,
-      [categoryId]: false,
-    }));
-  };
 
   const openEditDialog = (row: AntidepressantMasterRow) => {
     if (!canEditRows) {
@@ -1684,13 +1566,13 @@ const InitiationOfTreatment = ({
                                       Add formatted titration notes for this category.
                                     </p>
                                   </div>
-                                  {isEditingCategoryTitrationSchedule ? (
+                                  {isEditingTitrationSchedule ? (
                                     <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                                       <Button
                                         type="button"
                                         variant="secondary"
                                         size="sm"
-                                        onClick={handleCancelTitrationSchedule}
+                                        onClick={onCancelEditingTitrationSchedule}
                                         className="w-full sm:w-auto"
                                       >
                                         Cancel
@@ -1698,37 +1580,40 @@ const InitiationOfTreatment = ({
                                       <Button
                                         type="button"
                                         size="sm"
-                                        onClick={handleSaveTitrationSchedule}
+                                        onClick={onSaveTitrationSchedule}
+                                        disabled={isSavingTitrationSchedule}
                                         className="w-full sm:w-auto"
                                       >
-                                        Save
+                                        {isSavingTitrationSchedule ? "Saving..." : "Save"}
                                       </Button>
                                     </div>
                                   ) : (
-                                    <Button
-                                      type="button"
-                                      size="sm"
-                                      onClick={handleStartEditingTitrationSchedule}
-                                      className="w-full gap-2 sm:w-auto"
-                                      aria-label="Edit titration schedule"
-                                    >
-                                      <PencilLine className="h-3.5 w-3.5" />
-                                      Edit
-                                    </Button>
+                                    canEditTitrationSchedule && (
+                                      <Button
+                                        type="button"
+                                        size="sm"
+                                        onClick={onStartEditingTitrationSchedule}
+                                        className="w-full gap-2 sm:w-auto"
+                                        aria-label="Edit titration schedule"
+                                      >
+                                        <PencilLine className="h-3.5 w-3.5" />
+                                        Edit
+                                      </Button>
+                                    )
                                   )}
                                 </div>
 
                                 <div className="mt-3">
-                                  {isEditingCategoryTitrationSchedule ? (
+                                  {isEditingTitrationSchedule ? (
                                     <RichTextEditor
-                                      value={categoryTitrationScheduleDraft}
-                                      onChange={handleTitrationScheduleChange}
+                                      value={titrationScheduleContent}
+                                      onChange={(value) => onTitrationScheduleContentChange?.(value)}
                                       placeholder="Add titration schedule notes for this category..."
                                     />
-                                  ) : categoryTitrationScheduleHasValue ? (
+                                  ) : titrationScheduleHasValue ? (
                                     <div
                                       className="rich-text-content text-[15px] leading-relaxed text-muted-foreground sm:text-base"
-                                      dangerouslySetInnerHTML={{ __html: categoryTitrationSchedule }}
+                                      dangerouslySetInnerHTML={{ __html: titrationScheduleContent }}
                                     />
                                   ) : (
                                     <p className="text-sm text-muted-foreground">No titration schedule notes yet.</p>

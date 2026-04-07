@@ -43,6 +43,7 @@ type CategoryDetailRecord = {
   description: string | null;
   diagnosis: string | null;
   treatment: string | null;
+  titration_schedule: string | null;
   patient_education: string | null;
   improvement: string | null;
   reassessment: string | null;
@@ -58,6 +59,7 @@ type CategoryDetailRecord = {
 const ALL_SECTION_KEYS = [
   "diagnosis",
   "treatment",
+  "titration_schedule",
   "patient_education",
   "improvement",
   "reassessment",
@@ -83,10 +85,12 @@ type SectionDraft = Record<SectionFieldKey, string>;
 
 const BASE_CATEGORY_SELECT =
   "id, short_code, name, description, diagnosis, treatment, patient_education, improvement, reassessment, trial";
+const TITRATION_SCHEDULE_SELECT = "titration_schedule";
 const ASSESSMENT_RESPONSE_SELECT =
   "assessment_initial_response, assessment_antidepressant_switch, assessment_antidepressant_augment, assessment_change_treatment, assessment_dose_optimization";
 const ANTIDEPRESSANT_AUGMENT_SELECT = "antidepressant_augment";
 
+const isMissingTitrationScheduleColumnError = (message?: string) => message?.includes("titration_schedule");
 const isMissingAssessmentColumnError = (message?: string) =>
   [
     "assessment_initial_response",
@@ -102,6 +106,7 @@ const createSectionDraft = (
 ): SectionDraft => ({
   diagnosis: sanitizeRichText(source?.diagnosis),
   treatment: sanitizeRichText(source?.treatment),
+  titration_schedule: sanitizeRichText(source?.titration_schedule),
   patient_education: sanitizeRichText(source?.patient_education),
   improvement: sanitizeRichText(source?.improvement),
   reassessment: sanitizeRichText(source?.reassessment),
@@ -178,12 +183,16 @@ const CategoryDetail = () => {
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [editingTreatmentNotes, setEditingTreatmentNotes] = useState(false);
+  const [editingTitrationSchedule, setEditingTitrationSchedule] = useState(false);
   const [editingPatientEducation, setEditingPatientEducation] = useState(false);
-  const [savingTreatmentSection, setSavingTreatmentSection] = useState<"treatment" | "patient_education" | null>(null);
+  const [savingTreatmentSection, setSavingTreatmentSection] = useState<
+    "treatment" | "titration_schedule" | "patient_education" | null
+  >(null);
   const [editingAssessmentSections, setEditingAssessmentSections] = useState<Record<AssessmentSectionField, boolean>>(
     createAssessmentEditingState(),
   );
   const [savingAssessmentSection, setSavingAssessmentSection] = useState<AssessmentSectionField | null>(null);
+  const [titrationScheduleFieldAvailable, setTitrationScheduleFieldAvailable] = useState(true);
   const [assessmentResponseFieldsAvailable, setAssessmentResponseFieldsAvailable] = useState(true);
   const [antidepressantAugmentFieldAvailable, setAntidepressantAugmentFieldAvailable] = useState(true);
   const [deleting, setDeleting] = useState(false);
@@ -207,11 +216,13 @@ const CategoryDetail = () => {
       if (!id) return;
 
       let queryError: { message: string } | null = null;
+      let nextTitrationScheduleFieldAvailable = true;
       let nextAssessmentResponseFieldsAvailable = true;
       let nextAntidepressantAugmentFieldAvailable = true;
 
-      const [baseResponse, assessmentResponse, antidepressantAugmentResponse] = await Promise.all([
+      const [baseResponse, titrationScheduleResponse, assessmentResponse, antidepressantAugmentResponse] = await Promise.all([
         supabase.from("categories").select(BASE_CATEGORY_SELECT).eq("id", id).maybeSingle(),
+        supabase.from("categories").select(TITRATION_SCHEDULE_SELECT).eq("id", id).maybeSingle(),
         supabase.from("categories").select(ASSESSMENT_RESPONSE_SELECT).eq("id", id).maybeSingle(),
         supabase.from("categories").select(ANTIDEPRESSANT_AUGMENT_SELECT).eq("id", id).maybeSingle(),
       ]);
@@ -234,6 +245,7 @@ const CategoryDetail = () => {
 
       const categoryData: CategoryDetailRecord = {
         ...baseResponse.data,
+        titration_schedule: null,
         antidepressant_augment: null,
         assessment_initial_response: null,
         assessment_antidepressant_switch: null,
@@ -241,6 +253,16 @@ const CategoryDetail = () => {
         assessment_change_treatment: null,
         assessment_dose_optimization: null,
       };
+
+      if (titrationScheduleResponse.error) {
+        if (isMissingTitrationScheduleColumnError(titrationScheduleResponse.error.message)) {
+          nextTitrationScheduleFieldAvailable = false;
+        } else {
+          queryError = { message: titrationScheduleResponse.error.message };
+        }
+      } else if (titrationScheduleResponse.data) {
+        categoryData.titration_schedule = titrationScheduleResponse.data.titration_schedule ?? null;
+      }
 
       if (assessmentResponse.error) {
         if (isMissingAssessmentColumnError(assessmentResponse.error.message)) {
@@ -267,6 +289,7 @@ const CategoryDetail = () => {
       }
 
       if (!isMounted) return;
+      setTitrationScheduleFieldAvailable(nextTitrationScheduleFieldAvailable);
       setAssessmentResponseFieldsAvailable(nextAssessmentResponseFieldsAvailable);
       setAntidepressantAugmentFieldAvailable(nextAntidepressantAugmentFieldAvailable);
 
@@ -278,6 +301,9 @@ const CategoryDetail = () => {
 
       setCategory(categoryData);
       setDraft(createSectionDraft(categoryData));
+      setEditingTreatmentNotes(false);
+      setEditingTitrationSchedule(false);
+      setEditingPatientEducation(false);
       setEditingAssessmentSections(createAssessmentEditingState());
       setMetaName(categoryData.name ?? "");
       setMetaDescription(categoryData.description ?? "");
@@ -368,6 +394,10 @@ const CategoryDetail = () => {
       trial: toStoredRichText(nextDraft.trial),
     };
 
+    if (titrationScheduleFieldAvailable) {
+      payload.titration_schedule = toStoredRichText(nextDraft.titration_schedule);
+    }
+
     if (antidepressantAugmentFieldAvailable) {
       payload.antidepressant_augment = toStoredRichText(nextDraft.antidepressant_augment);
     }
@@ -395,7 +425,7 @@ const CategoryDetail = () => {
     setEditing(false);
   };
 
-  const handleTreatmentSectionCancel = (field: "treatment" | "patient_education") => {
+  const handleTreatmentSectionCancel = (field: "treatment" | "titration_schedule" | "patient_education") => {
     if (!category) return;
 
     setDraft((prev) => ({
@@ -408,11 +438,39 @@ const CategoryDetail = () => {
       return;
     }
 
+    if (field === "titration_schedule") {
+      setEditingTitrationSchedule(false);
+      return;
+    }
+
     setEditingPatientEducation(false);
   };
 
-  const handleTreatmentSectionSave = async (field: "treatment" | "patient_education") => {
+  const handleTreatmentSectionStartEditing = (field: "treatment" | "titration_schedule" | "patient_education") => {
+    if (field === "titration_schedule" && !titrationScheduleFieldAvailable) {
+      toast.error("Run the latest titration schedule migration in Supabase to edit this section.");
+      return;
+    }
+
+    if (field === "treatment") {
+      setEditingTreatmentNotes(true);
+      return;
+    }
+
+    if (field === "titration_schedule") {
+      setEditingTitrationSchedule(true);
+      return;
+    }
+
+    setEditingPatientEducation(true);
+  };
+
+  const handleTreatmentSectionSave = async (field: "treatment" | "titration_schedule" | "patient_education") => {
     if (!category) return;
+    if (field === "titration_schedule" && !titrationScheduleFieldAvailable) {
+      toast.error("Run the latest titration schedule migration in Supabase to save this section.");
+      return;
+    }
 
     const normalizedValue = sanitizeRichText(draft[field]);
     const payload = {
@@ -437,6 +495,11 @@ const CategoryDetail = () => {
 
     if (field === "treatment") {
       setEditingTreatmentNotes(false);
+      return;
+    }
+
+    if (field === "titration_schedule") {
+      setEditingTitrationSchedule(false);
       return;
     }
 
@@ -919,19 +982,29 @@ const CategoryDetail = () => {
                   categoryId={category.id}
                   categoryName={category.name}
                   factorsContent={draft.treatment}
+                  titrationScheduleContent={draft.titration_schedule}
                   patientEducationContent={draft.patient_education}
                   canEditContent={canEdit}
                   isEditingFactors={editingTreatmentNotes}
                   isSavingFactors={savingTreatmentSection === "treatment"}
-                  onStartEditingFactors={() => setEditingTreatmentNotes(true)}
+                  onStartEditingFactors={() => handleTreatmentSectionStartEditing("treatment")}
                   onCancelEditingFactors={() => handleTreatmentSectionCancel("treatment")}
                   onSaveFactors={() => void handleTreatmentSectionSave("treatment")}
+                  canEditTitrationSchedule={canEdit}
+                  isEditingTitrationSchedule={editingTitrationSchedule}
+                  isSavingTitrationSchedule={savingTreatmentSection === "titration_schedule"}
+                  onStartEditingTitrationSchedule={() => handleTreatmentSectionStartEditing("titration_schedule")}
+                  onCancelEditingTitrationSchedule={() => handleTreatmentSectionCancel("titration_schedule")}
+                  onSaveTitrationSchedule={() => void handleTreatmentSectionSave("titration_schedule")}
                   isEditingPatientEducation={editingPatientEducation}
                   isSavingPatientEducation={savingTreatmentSection === "patient_education"}
-                  onStartEditingPatientEducation={() => setEditingPatientEducation(true)}
+                  onStartEditingPatientEducation={() => handleTreatmentSectionStartEditing("patient_education")}
                   onCancelEditingPatientEducation={() => handleTreatmentSectionCancel("patient_education")}
                   onSavePatientEducation={() => void handleTreatmentSectionSave("patient_education")}
                   onFactorsContentChange={(value) => setDraft((prev) => ({ ...prev, treatment: value }))}
+                  onTitrationScheduleContentChange={(value) =>
+                    setDraft((prev) => ({ ...prev, titration_schedule: value }))
+                  }
                   onPatientEducationContentChange={(value) =>
                     setDraft((prev) => ({ ...prev, patient_education: value }))
                   }

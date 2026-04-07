@@ -29,6 +29,7 @@ const mockCategory = {
   description: "Mood disorder category",
   diagnosis: "<p>Diagnosis content</p>",
   treatment: "<p>Treatment content</p>",
+  titration_schedule: "<p>Existing titration schedule</p>",
   patient_education: "<p>Patient education</p>",
   improvement: null,
   reassessment: "<p>Assessment notes</p>",
@@ -272,6 +273,85 @@ describe("CategoryDetail", () => {
     await waitFor(() => {
       expect(updateMock).toHaveBeenCalledWith({
         antidepressant_augment: "<p>Updated augment notes</p>",
+      });
+    });
+  });
+
+  it("saves the treatment tab titration schedule to the category record", async () => {
+    vi.mocked(useAuth).mockReturnValue({
+      user: null,
+      profile: {
+        role: "super_admin",
+      },
+      loading: false,
+      session: null,
+      signIn: vi.fn(),
+      signOut: vi.fn(),
+      refreshProfile: vi.fn(),
+    } as never);
+
+    vi.mocked(supabase.rpc).mockResolvedValue({
+      data: [
+        {
+          id: "drug-1",
+          category_id: "category-1",
+          drug_name: "Sertraline",
+          medication_type: "monotherapy",
+          frequency: "daily",
+          tolerability_less: null,
+          tolerability_more: null,
+          safety: null,
+          cost: null,
+          line_of_treatment: 1,
+          initiation_dose_mg: 50,
+          therapeutic_min_dose_mg: 50,
+          therapeutic_max_dose_mg: 200,
+          max_dose_mg: 200,
+          updated_at: "2026-03-16T12:00:00.000Z",
+          is_active: true,
+        },
+      ],
+      error: null,
+    } as never);
+
+    const { container } = render(
+      <MemoryRouter initialEntries={["/category/category-1#treatment"]}>
+        <UiPreferencesProvider>
+          <Routes>
+            <Route path="/category/:id" element={<CategoryDetail />} />
+          </Routes>
+        </UiPreferencesProvider>
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole("link", { name: "Initiation of Treatment" })).toHaveAttribute("aria-current", "page");
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Line 1" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Select medication Sertraline" })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Select medication Sertraline" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Edit titration schedule" })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit titration schedule" }));
+
+    const editor = container.querySelector('[contenteditable="true"]') as HTMLDivElement;
+    editor.innerHTML = "<p>Updated titration schedule</p>";
+    fireEvent.input(editor);
+    fireEvent.blur(editor);
+
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => {
+      expect(updateMock).toHaveBeenCalledWith({
+        titration_schedule: "<p>Updated titration schedule</p>",
       });
     });
   });
